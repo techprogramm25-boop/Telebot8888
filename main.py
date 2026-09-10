@@ -12,7 +12,7 @@ bot = Bot(token=API_TOKEN, parse_mode=types.ParseMode.HTML)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-# Vercel talab qiladigan handler (FastAPI app)
+# VERCEL TALAB QILADIGAN ASOSIY O'ZGARUVCHI (HANDLER)
 app = FastAPI()
 
 @dp.message_handler(commands=['start'])
