@@ -13,9 +13,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
 API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAGdS6WeHfTz2RenWRYUnNxleNESNXc1F4Y")
 
-# Adminlar ID ro'yxati
 ADMINS = [6977836294, 8409259397]
-
 REQUIRED_CHANNEL = "@YukchiForwarder"
 TARGET_GROUP_ID = -1003968416767
 
@@ -30,10 +28,10 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 app = FastAPI()
 
-# Ma'lumotlar bazasi (xotirada)
-user_posts_count = {}   
-user_add_req = {}      
-banned_users = {}       # {user_id: "username_yoki_nomer"}
+user_posts_count = {}   # Foydalanuvchi nechta post tashlagani
+user_add_req = {}      # Nechta odam qo'shishi kerakligi
+verified_users = set()  # Odam qo'shib tekshiruvdan o'tganlar
+banned_users = {}       # Ban bo'lganlar
 
 class PostState(StatesGroup):
     waiting_for_text = State()
@@ -65,7 +63,6 @@ def get_add_members_keyboard():
         [InlineKeyboardButton(text="🔄 Qo'shdim, tekshirish", callback_data="check_added_members")]
     ])
 
-# Admin panel tugmalari
 def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -78,15 +75,13 @@ def get_admin_keyboard():
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     
-    # Ban bo'lgan foydalanuvchini bloklash
     if user_id in banned_users:
-        await message.answer("⛔️ **Siz botdan va guruhdan bloklangansiz!** Yuk tashlay olmaysiz.")
+        await message.answer("⛔️ **Siz botdan va guruhdan bloklangansiz!**")
         return
 
-    # Adminlar uchun alohida ko'rinish
     if user_id in ADMINS:
         await message.answer(
-            "👨‍💻 **Hush kelibsiz Admin!**\n\nBoshqaruv panelidan foydalanishingiz mumkin:",
+            "👨‍💻 **Hush kelibsiz Admin!**\n\nBoshqaruv paneli:",
             reply_markup=get_admin_keyboard()
         )
 
@@ -110,12 +105,11 @@ async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
 
-# ADMIN: BAN QILISH BUYRUG'I
 @dp.callback_query(F.data == "admin_ban_user")
 async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
         return
-    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining **Username** (masalan `@username`) yoki **ID / Nomerini** yuboring:")
+    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining **Username** yoki **ID / Nomerini** yuboring:")
     await state.set_state(AdminState.waiting_for_ban_target)
 
 @dp.message(AdminState.waiting_for_ban_target)
@@ -124,21 +118,18 @@ async def admin_ban_process(message: types.Message, state: FSMContext):
         return
     
     target = message.text.strip()
-    # ID yoki Username orqali belgilash
     ban_key = int(target) if target.isdigit() else target
     banned_users[ban_key] = target
 
-    # Agar ID bo'lsa Telegram guruhdan ham BAN qilish
     if isinstance(ban_key, int):
         try:
             await bot.ban_chat_member(chat_id=TARGET_GROUP_ID, user_id=ban_key)
         except Exception:
             pass
 
-    await message.answer(f"✅ **{target}** muvaffaqiyatli bloklandi (BAN qilindi)!")
+    await message.answer(f"✅ **{target}** muvaffaqiyatli BAN qilindi!")
     await state.clear()
 
-# ADMIN: BANDAN CHIQARISH RO'YXATI
 @dp.callback_query(F.data == "admin_unban_list")
 async def admin_unban_list(call: types.CallbackQuery):
     if call.from_user.id not in ADMINS:
@@ -153,9 +144,8 @@ async def admin_unban_list(call: types.CallbackQuery):
         buttons.append([InlineKeyboardButton(text=f"🔓 {uname}", callback_data=f"unban:{uid}")])
     
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
-    await call.message.answer("Qaysi foydalanuvchini bandan chiqarmoqchisiz? Tanlang:", reply_markup=kb)
+    await call.message.answer("Bandan chiqarmoqchi bo'lgan foydalanuvchini tanlang:", reply_markup=kb)
 
-# ADMIN: BANDAN CHIQARISH
 @dp.callback_query(F.data.startswith("unban:"))
 async def admin_unban_process(call: types.CallbackQuery):
     if call.from_user.id not in ADMINS:
@@ -171,9 +161,9 @@ async def admin_unban_process(call: types.CallbackQuery):
                 await bot.unban_chat_member(chat_id=TARGET_GROUP_ID, user_id=uid)
             except Exception:
                 pass
-        await call.message.edit_text("✅ Foydalanuvchi muvaffaqiyatli bandan chiqarildi!")
+        await call.message.edit_text("✅ Foydalanuvchi bandan chiqarildi!")
     else:
-        await call.answer("Bu foydalanuvchi ro'yxatda topilmadi.", show_alert=True)
+        await call.answer("Topilmadi.", show_alert=True)
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
@@ -182,7 +172,7 @@ async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
         await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yuborishingiz mumkin:")
         await state.set_state(PostState.waiting_for_text)
     else:
-        await call.answer("❌ Siz hali guruhga qo'shilmadingiz! Avval qo'shiling.", show_alert=True)
+        await call.answer("❌ Siz hali guruhga qo'shilmadingiz!", show_alert=True)
 
 @dp.message(PostState.waiting_for_text)
 async def process_text(message: types.Message, state: FSMContext):
@@ -197,13 +187,15 @@ async def process_text(message: types.Message, state: FSMContext):
         return
 
     posts_count = user_posts_count.get(user_id, 0)
-    if posts_count >= 1:
+    
+    # FAQAT 8 TA YUKDAN KO'PAYGANDA (9-YUKDAN) VA TUSHIRILMAGAN BO'LSA ODAM QO'SHISHNI SO'RAYDI
+    if posts_count > 8 and user_id not in verified_users:
         if user_id not in user_add_req:
             user_add_req[user_id] = random.randint(2, 50)
         
         req_count = user_add_req[user_id]
         await message.answer(
-            f"🛑 <b>Diqqat!</b> Ikkinchi va undan keyingi e'lonlarni joylash uchun guruhga kamida <b>{req_count} ta odam</b> qo'shishingiz kerak!\n\n"
+            f"🛑 <b>Diqqat!</b> Siz 8 tadan ko'p e'lon joyladingiz. Davom etish uchun guruhga kamida <b>{req_count} ta odam</b> qo'shishingiz kerak!\n\n"
             "Odam qo'shib bo'lgach, pastdagi tekshirish tugmasini bosing:",
             reply_markup=get_add_members_keyboard()
         )
@@ -220,6 +212,9 @@ async def process_text(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "check_added_members")
 async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
+    
+    # Odam qo'shgani tasdiqlandi deb belgilab qo'yamiz
+    verified_users.add(user_id)
     if user_id in user_add_req:
         del user_add_req[user_id]
     
@@ -252,7 +247,13 @@ async def process_phone(message: types.Message, state: FSMContext):
             text=final_caption,
             reply_markup=keyboard
         )
+        # Sanoqni oshiramiz
         user_posts_count[user_id] = user_posts_count.get(user_id, 0) + 1
+        
+        # Post muvaffaqiyatli joylangach verified holatini tozalaymiz (kelasi 8 tadan keyingi porsiya uchun)
+        if user_id in verified_users:
+            verified_users.remove(user_id)
+
         await message.answer("✅ E'loningiz muvaffaqiyatli guruhga joylandi! Yangi e'lon berish uchun matn yuboring.")
     except Exception as e:
         await message.answer(f"❌ Xatolik yuz berdi. Bot guruhda admin ekanligini tekshiring.\n{e}")
