@@ -2,6 +2,8 @@ import os
 import re
 import logging
 import random
+import asyncio
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode, ChatMemberStatus
@@ -28,10 +30,11 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 app = FastAPI()
 
-user_posts_count = {}   # Foydalanuvchi nechta post tashlagani
-user_add_req = {}      # Nechta odam qo'shishi kerakligi
-verified_users = set()  # Odam qo'shib tekshiruvdan o'tganlar
-banned_users = {}       # Ban bo'lganlar
+user_posts_count = {}     # Postlar soni
+user_add_req = {}        # Nechta odam qo'shishi kerakligi
+verified_users = set()    # Odam qo'shganligi tasdiqlanganlar
+banned_users = {}         # Ban bo'lganlar
+user_last_post_time = {}  # Oxirgi post vaqti (1 soatlik limit uchun)
 
 class PostState(StatesGroup):
     waiting_for_text = State()
@@ -50,6 +53,14 @@ async def check_subscription(user_id: int) -> bool:
         return member.status in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.MEMBER]
     except Exception:
         return False
+
+# 1 soatdan keyin xabarni o'chirish uchun yordamchi funksiya
+async def delete_message_after_delay(chat_id: int, message_id: int, delay_seconds: int = 3600):
+    await asyncio.sleep(delay_seconds)
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
 def get_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -186,10 +197,22 @@ async def process_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
+    # 1 SOATLIK LIMIT TEKSHIRUVI (ADMINLAR UCHUN MUSTASNO)
+    if user_id not in ADMINS and user_id in user_last_post_time:
+        last_time = user_last_post_time[user_id]
+        time_diff = datetime.now() - last_time
+        if time_diff < timedelta(hours=1):
+            remaining_minutes = int((timedelta(hours=1) - time_diff).total_seconds() // 60)
+            await message.answer(
+                f"⏱ <b>Siz 1 soatda faqat 1 marta e'lon berishingiz mumkin!</b>\n\n"
+                f"Yangi e'lon joylash uchun yana <b>{remaining_minutes} daqiqa</b> kuting."
+            )
+            return
+
     posts_count = user_posts_count.get(user_id, 0)
     
-    # FAQAT 8 TA YUKDAN KO'PAYGANDA (9-YUKDAN) VA TUSHIRILMAGAN BO'LSA ODAM QO'SHISHNI SO'RAYDI
-    if posts_count > 8 and user_id not in verified_users:
+    # 8 TA YUKDAN KO'PAYGANDA ODAM QO'SHISH SHARTI (ADMINLARGA TA'SIR QILMAYDI)
+    if user_id not in ADMINS and posts_count > 8 and user_id not in verified_users:
         if user_id not in user_add_req:
             user_add_req[user_id] = random.randint(2, 50)
         
@@ -212,8 +235,6 @@ async def process_text(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "check_added_members")
 async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
-    
-    # Odam qo'shgani tasdiqlandi deb belgilab qo'yamiz
     verified_users.add(user_id)
     if user_id in user_add_req:
         del user_add_req[user_id]
@@ -247,10 +268,9 @@ async def process_phone(message: types.Message, state: FSMContext):
             text=final_caption,
             reply_markup=keyboard
         )
-        # Sanoqni oshiramiz
         user_posts_count[user_id] = user_posts_count.get(user_id, 0) + 1
+        user_last_post_time[user_id] = datetime.now()
         
-        # Post muvaffaqiyatli joylangach verified holatini tozalaymiz (kelasi 8 tadan keyingi porsiya uchun)
         if user_id in verified_users:
             verified_users.remove(user_id)
 
@@ -263,24 +283,49 @@ async def process_phone(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data.startswith("show_phone:"))
 async def show_phone_handler(call: types.CallbackQuery):
     phone = call.data.split("show_phone:")[1]
-    await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
+    await call.answer(f"📞 Murojaat me'yori:\n{phone}", show_alert=True)
 
+# GURUHDA TO'G'RIDAN-TO'G'RI TASHALGAN XABARLARNI USHLASH VA BAN/OGOHLANTIRISH
 @dp.message(F.chat.id == TARGET_GROUP_ID)
-async def auto_ban_spammers(message: types.Message):
-    if not message.text and not message.caption:
+async def handle_group_messages(message: types.Message):
+    user_id = message.from_user.id
+
+    # Adminlarga tegmaymiz
+    if user_id in ADMINS:
         return
 
-    text = (message.text or message.caption).lower()
+    text = (message.text or message.caption or "").lower()
     has_spam_word = any(word in text for word in SPAM_WORDS)
     has_link = bool(re.search(LINK_REGEX, text))
 
+    # Reklama yoki ssilka tarqatganlarni BAN qilish
     if has_spam_word or has_link:
         try:
             await message.delete()
-            await bot.ban_chat_member(chat_id=TARGET_GROUP_ID, user_id=message.from_user.id)
-            banned_users[message.from_user.id] = message.from_user.full_name
+            await bot.ban_chat_member(chat_id=TARGET_GROUP_ID, user_id=user_id)
+            banned_users[user_id] = message.from_user.full_name
         except Exception:
             pass
+        return
+
+    # Oddiy foydalanuvchi guruhga o'zi xabar tashlasa, o'chirib bot tugmasini ko'rsatish
+    try:
+        await message.delete()
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 Bot orqali yuk yuborish", url="https://t.me/TeleProzona_Bot")]
+        ])
+        
+        warn_msg = await message.answer(
+            f"❗️ <b>{message.from_user.first_name}</b>, guruhga to'g'ridan-to'g'ri e'lon tashlash taqiqlangan!\n\n"
+            "E'lon joylash uchun pastdagi tugma orqali botga o'ting:",
+            reply_markup=kb
+        )
+        
+        # Ogohlantirish xabarini 1 soat (3600 sek)dan keyin o'chirish
+        asyncio.create_task(delete_message_after_delay(TARGET_GROUP_ID, warn_msg.message_id, 3600))
+    except Exception:
+        pass
 
 @app.post("/")
 @app.post("/api/index")
