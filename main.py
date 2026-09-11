@@ -13,6 +13,9 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
 API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAGdS6WeHfTz2RenWRYUnNxleNESNXc1F4Y")
 
+# Adminlar ID ro'yxati
+ADMINS = [6977836294, 8409259397]
+
 REQUIRED_CHANNEL = "@YukchiForwarder"
 TARGET_GROUP_ID = -1003968416767
 
@@ -27,19 +30,20 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 app = FastAPI()
 
-# Ma'lumotlarni vaqtincha saqlash
-user_posts_count = {}   # Foydalanuvchi necha marta post tashlagani
-user_add_req = {}      # Foydalanuvchi nechta odam qo'shishi kerakligi
+# Ma'lumotlar bazasi (xotirada)
+user_posts_count = {}   
+user_add_req = {}      
+banned_users = {}       # {user_id: "username_yoki_nomer"}
 
 class PostState(StatesGroup):
     waiting_for_text = State()
     waiting_for_phone = State()
 
-# Filtrlar uchun Regex patternlar
+class AdminState(StatesGroup):
+    waiting_for_ban_target = State()
+
 PHONE_REGEX = r'(\+?998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\b\d{2}\s?\d{3}\s?\d{2}\s?\d{2}\b|\b\d{9}\b)'
 LINK_REGEX = r'(https?://[^\s]+|t\.me/[^\s]+|@[a-zA-Z0-9_]+)'
-
-# Taqiqlangan reklama so'zlari
 SPAM_WORDS = ["kanalga", "gruppaga", "o'ting", "oting", "murojaat", "arzon", "aksiya", "reklama", "lichkaga", "manga oting"]
 
 async def check_subscription(user_id: int) -> bool:
@@ -61,9 +65,32 @@ def get_add_members_keyboard():
         [InlineKeyboardButton(text="🔄 Qo'shdim, tekshirish", callback_data="check_added_members")]
     ])
 
+# Admin panel tugmalari
+def get_admin_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🚫 Ban qilish", callback_data="admin_ban_user"),
+            InlineKeyboardButton(text="✅ Bandan chiqarish", callback_data="admin_unban_list")
+        ]
+    ])
+
 @dp.message(F.text == "/start")
 async def start_cmd(message: types.Message, state: FSMContext):
-    is_subscribed = await check_subscription(message.from_user.id)
+    user_id = message.from_user.id
+    
+    # Ban bo'lgan foydalanuvchini bloklash
+    if user_id in banned_users:
+        await message.answer("⛔️ **Siz botdan va guruhdan bloklangansiz!** Yuk tashlay olmaysiz.")
+        return
+
+    # Adminlar uchun alohida ko'rinish
+    if user_id in ADMINS:
+        await message.answer(
+            "👨‍💻 **Hush kelibsiz Admin!**\n\nBoshqaruv panelidan foydalanishingiz mumkin:",
+            reply_markup=get_admin_keyboard()
+        )
+
+    is_subscribed = await check_subscription(user_id)
     if not is_subscribed:
         await message.answer("⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", reply_markup=get_sub_keyboard())
         return
@@ -83,6 +110,71 @@ async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
 
+# ADMIN: BAN QILISH BUYRUG'I
+@dp.callback_query(F.data == "admin_ban_user")
+async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
+    if call.from_user.id not in ADMINS:
+        return
+    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining **Username** (masalan `@username`) yoki **ID / Nomerini** yuboring:")
+    await state.set_state(AdminState.waiting_for_ban_target)
+
+@dp.message(AdminState.waiting_for_ban_target)
+async def admin_ban_process(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMINS:
+        return
+    
+    target = message.text.strip()
+    # ID yoki Username orqali belgilash
+    ban_key = int(target) if target.isdigit() else target
+    banned_users[ban_key] = target
+
+    # Agar ID bo'lsa Telegram guruhdan ham BAN qilish
+    if isinstance(ban_key, int):
+        try:
+            await bot.ban_chat_member(chat_id=TARGET_GROUP_ID, user_id=ban_key)
+        except Exception:
+            pass
+
+    await message.answer(f"✅ **{target}** muvaffaqiyatli bloklandi (BAN qilindi)!")
+    await state.clear()
+
+# ADMIN: BANDAN CHIQARISH RO'YXATI
+@dp.callback_query(F.data == "admin_unban_list")
+async def admin_unban_list(call: types.CallbackQuery):
+    if call.from_user.id not in ADMINS:
+        return
+
+    if not banned_users:
+        await call.message.answer("📜 Hozircha ban bo'lgan foydalanuvchilar yo'q.")
+        return
+
+    buttons = []
+    for uid, uname in banned_users.items():
+        buttons.append([InlineKeyboardButton(text=f"🔓 {uname}", callback_data=f"unban:{uid}")])
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await call.message.answer("Qaysi foydalanuvchini bandan chiqarmoqchisiz? Tanlang:", reply_markup=kb)
+
+# ADMIN: BANDAN CHIQARISH
+@dp.callback_query(F.data.startswith("unban:"))
+async def admin_unban_process(call: types.CallbackQuery):
+    if call.from_user.id not in ADMINS:
+        return
+
+    raw_uid = call.data.split("unban:")[1]
+    uid = int(raw_uid) if raw_uid.isdigit() else raw_uid
+
+    if uid in banned_users:
+        del banned_users[uid]
+        if isinstance(uid, int):
+            try:
+                await bot.unban_chat_member(chat_id=TARGET_GROUP_ID, user_id=uid)
+            except Exception:
+                pass
+        await call.message.edit_text("✅ Foydalanuvchi muvaffaqiyatli bandan chiqarildi!")
+    else:
+        await call.answer("Bu foydalanuvchi ro'yxatda topilmadi.", show_alert=True)
+
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
     if await check_subscription(call.from_user.id):
@@ -95,11 +187,15 @@ async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
 @dp.message(PostState.waiting_for_text)
 async def process_text(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
+
+    if user_id in banned_users:
+        await message.answer("⛔️ Siz bloklangansiz!")
+        return
+
     if not await check_subscription(user_id):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
-    # Odam qo'shish limitini tekshirish (2-martadan boshlab)
     posts_count = user_posts_count.get(user_id, 0)
     if posts_count >= 1:
         if user_id not in user_add_req:
@@ -114,10 +210,7 @@ async def process_text(message: types.Message, state: FSMContext):
         return
 
     raw_text = message.text or message.caption or ""
-    
-    # 1. Telefon raqamlarni olib tashlash
     cleaned = re.sub(PHONE_REGEX, "", raw_text)
-    # 2. @username, t.me ssilka va havola (link)larni butunlay tozalash
     cleaned = re.sub(LINK_REGEX, "", cleaned).strip()
 
     await state.update_data(cleaned_text=cleaned)
@@ -127,14 +220,11 @@ async def process_text(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "check_added_members")
 async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
-    req_count = user_add_req.get(user_id, 2)
-    
-    # Guruh shartlari bajarilgan deb hisoblash va navbatdagi postga ruxsat berish
     if user_id in user_add_req:
         del user_add_req[user_id]
     
     await call.message.delete()
-    await call.message.answer(f"✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk matnini yuborishingiz mumkin:")
+    await call.message.answer("✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk matnini yuborishingiz mumkin:")
     await state.set_state(PostState.waiting_for_text)
 
 @dp.message(PostState.waiting_for_phone)
@@ -174,24 +264,20 @@ async def show_phone_handler(call: types.CallbackQuery):
     phone = call.data.split("show_phone:")[1]
     await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
 
-# GURUHDA REKLAMA SPREAD QILGANLARNI AVTO-BAN QILISH HANDLERI
 @dp.message(F.chat.id == TARGET_GROUP_ID)
 async def auto_ban_spammers(message: types.Message):
     if not message.text and not message.caption:
         return
 
     text = (message.text or message.caption).lower()
-
-    # Reklama so'zlari yoki @username/http ssilka borligini tekshirish
     has_spam_word = any(word in text for word in SPAM_WORDS)
     has_link = bool(re.search(LINK_REGEX, text))
 
     if has_spam_word or has_link:
         try:
-            # Xabarni o'chirish
             await message.delete()
-            # Foydalanuvchini guruhdan BAN qilish
             await bot.ban_chat_member(chat_id=TARGET_GROUP_ID, user_id=message.from_user.id)
+            banned_users[message.from_user.id] = message.from_user.full_name
         except Exception:
             pass
 
