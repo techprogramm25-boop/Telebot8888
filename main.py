@@ -3,23 +3,30 @@ import logging
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
+# Bot tokenini olish
 API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAGdS6WeHfTz2RenWRYUnNxleNESNXc1F4Y")
 ADMINS = [6977836294, 8409259397]
 
 logging.basicConfig(level=logging.INFO)
 
-bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
+# AIOGRAM 3.7+ UCHUN TO'G'RILANGAN QISM: DefaultBotProperties ishlatildi
+bot = Bot(
+    token=API_TOKEN, 
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
+
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 app = FastAPI()
 
-# Guruhlarni saqlash ro'yxati
+# Guruhlarni saqlash
 groups_db = set()
 
 class PostState(StatesGroup):
@@ -68,7 +75,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
         return
 
     await message.answer(
-        "<b>@Yusufxonpro1 Siz uchun Tayyor!</b>\n\n"
+        "<b>Bot tayyor!</b>\n\n"
         "Yuk/E'lon matnini yoki rasmini yuboring:"
     )
     await state.set_state(PostState.waiting_for_content)
