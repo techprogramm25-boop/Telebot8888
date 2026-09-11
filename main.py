@@ -13,7 +13,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
-API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAGdS6WeHfTz2RenWRYUnNxleNESNXc1F4Y")
+# Yangi tokeningiz joylashtirildi
+API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTWqo")
 
 ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
@@ -30,11 +31,11 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 app = FastAPI()
 
-user_posts_count = {}     # Postlar soni
-user_add_req = {}        # Nechta odam qo'shishi kerakligi
-verified_users = set()    # Odam qo'shganligi tasdiqlanganlar
-banned_users = {}         # Ban bo'lganlar
-user_last_post_time = {}  # Oxirgi post vaqti (1 soatlik limit uchun)
+user_posts_count = {}     
+user_add_req = {}        
+verified_users = set()    
+banned_users = {}         
+user_last_post_time = {}  
 
 class PostState(StatesGroup):
     waiting_for_text = State()
@@ -54,7 +55,6 @@ async def check_subscription(user_id: int) -> bool:
     except Exception:
         return False
 
-# 1 soatdan keyin xabarni o'chirish uchun yordamchi funksiya
 async def delete_message_after_delay(chat_id: int, message_id: int, delay_seconds: int = 3600):
     await asyncio.sleep(delay_seconds)
     try:
@@ -87,12 +87,12 @@ async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     
     if user_id in banned_users:
-        await message.answer("⛔️ **Siz botdan va guruhdan bloklangansiz!**")
+        await message.answer("⛔️ <b>Siz botdan va guruhdan bloklangansiz!</b>")
         return
 
     if user_id in ADMINS:
         await message.answer(
-            "👨‍💻 **Hush kelibsiz Admin!**\n\nBoshqaruv paneli:",
+            "👨‍💻 <b>Hush kelibsiz Admin!</b>\n\nBoshqaruv paneli:",
             reply_markup=get_admin_keyboard()
         )
 
@@ -101,16 +101,13 @@ async def start_cmd(message: types.Message, state: FSMContext):
         await message.answer("⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", reply_markup=get_sub_keyboard())
         return
 
+    # Matn to'liq va oqilona holatga keltirildi
     welcome_text = (
-        "Assalomu Alaykum 😎\n\n"
-        "____________________________________\n"
-        "📢 Yukingiz bo‘lsa — guruhga joylang!\n"
-        "🚛 Mashina bo‘lsa — yukingizni toping!\n"
-        "_______________________________\n"
-        "Reklama 🧐 Ban\n"
-        "__                         —\n"
-        "@Yusufxonpro1 Admin😁\n"
-        "@YukchiForwarder\n\n"
+        "<b>Assalomu Alaykum!</b> 😎\n\n"
+        "📢 Yukingiz bo‘lsa — guruhimizga joylang!\n"
+        "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
+        "👨‍💻 Admin: @Yusufxonpro1\n"
+        "📢 Rasmiy kanal: @YukchiForwarder\n\n"
         "<b>E'lon joylash uchun yuk matnini yoki rasmini yuboring:</b>"
     )
     await message.answer(welcome_text)
@@ -120,7 +117,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
 async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
         return
-    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining **Username** yoki **ID / Nomerini** yuboring:")
+    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining <b>Username</b> yoki <b>ID / Nomerini</b> yuboring:")
     await state.set_state(AdminState.waiting_for_ban_target)
 
 @dp.message(AdminState.waiting_for_ban_target)
@@ -138,7 +135,7 @@ async def admin_ban_process(message: types.Message, state: FSMContext):
         except Exception:
             pass
 
-    await message.answer(f"✅ **{target}** muvaffaqiyatli BAN qilindi!")
+    await message.answer(f"✅ <b>{target}</b> muvaffaqiyatli BAN qilindi!")
     await state.clear()
 
 @dp.callback_query(F.data == "admin_unban_list")
@@ -197,7 +194,6 @@ async def process_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
-    # 1 SOATLIK LIMIT TEKSHIRUVI (ADMINLAR UCHUN MUSTASNO)
     if user_id not in ADMINS and user_id in user_last_post_time:
         last_time = user_last_post_time[user_id]
         time_diff = datetime.now() - last_time
@@ -211,7 +207,6 @@ async def process_text(message: types.Message, state: FSMContext):
 
     posts_count = user_posts_count.get(user_id, 0)
     
-    # 8 TA YUKDAN KO'PAYGANDA ODAM QO'SHISH SHARTI (ADMINLARGA TA'SIR QILMAYDI)
     if user_id not in ADMINS and posts_count > 8 and user_id not in verified_users:
         if user_id not in user_add_req:
             user_add_req[user_id] = random.randint(2, 50)
@@ -253,8 +248,8 @@ async def process_phone(message: types.Message, state: FSMContext):
     final_caption = (
         f"{cleaned_text}\n\n"
         "_____________________\n"
-        "@Yusufxonpro1 Admin\n"
-        "@YukchiForwarder"
+        "👨‍💻 @Yusufxonpro1 Admin\n"
+        "📢 @YukchiForwarder"
     )
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -283,14 +278,12 @@ async def process_phone(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data.startswith("show_phone:"))
 async def show_phone_handler(call: types.CallbackQuery):
     phone = call.data.split("show_phone:")[1]
-    await call.answer(f"📞 Murojaat me'yori:\n{phone}", show_alert=True)
+    await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
 
-# GURUHDA TO'G'RIDAN-TO'G'RI TASHALGAN XABARLARNI USHLASH VA BAN/OGOHLANTIRISH
 @dp.message(F.chat.id == TARGET_GROUP_ID)
 async def handle_group_messages(message: types.Message):
     user_id = message.from_user.id
 
-    # Adminlarga tegmaymiz
     if user_id in ADMINS:
         return
 
@@ -298,7 +291,6 @@ async def handle_group_messages(message: types.Message):
     has_spam_word = any(word in text for word in SPAM_WORDS)
     has_link = bool(re.search(LINK_REGEX, text))
 
-    # Reklama yoki ssilka tarqatganlarni BAN qilish
     if has_spam_word or has_link:
         try:
             await message.delete()
@@ -308,7 +300,6 @@ async def handle_group_messages(message: types.Message):
             pass
         return
 
-    # Oddiy foydalanuvchi guruhga o'zi xabar tashlasa, o'chirib bot tugmasini ko'rsatish
     try:
         await message.delete()
         
@@ -322,7 +313,6 @@ async def handle_group_messages(message: types.Message):
             reply_markup=kb
         )
         
-        # Ogohlantirish xabarini 1 soat (3600 sek)dan keyin o'chirish
         asyncio.create_task(delete_message_after_delay(TARGET_GROUP_ID, warn_msg.message_id, 3600))
     except Exception:
         pass
