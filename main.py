@@ -1,25 +1,154 @@
 import os
+import asyncio
+import logging
 from fastapi import FastAPI, Request
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Update
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
-# Token Vercel Environment Variables yoki standart tokendan olinadi
-TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAGdS6WeHfTz2RenWRYUnNxleNESNXc1F4Y")
+# Bot Token va Adminlar ro'yxati
+API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAGdS6WeHfTz2RenWRYUnNxleNESNXc1F4Y")
+ADMINS = [6977836294, 8409259397]
 
-bot = Bot(token=TOKEN)
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 app = FastAPI()
 
-# /start buyrug'iga javob beruvchi handler
-@dp.message()
-async def main_handler(message: types.Message):
-    if message.text == "/start":
-        await message.answer("Salom! Bot Vercel serverless muhitida muvaffaqiyatli ishlamoqda! 🚀")
+# Guruhlarni saqlash uchun baza (operativ xotirada)
+groups_db = set()
 
-# Webhook keladigan endpoint (Vercel va Telegram ulagichi)
+# FSM (Holatlar)
+class PostState(StatesGroup):
+    waiting_for_content = State()
+    waiting_for_decoration = State()
+    waiting_for_days = State()
+    confirm_publish = State()
+
+# Inline Tugmalar
+def get_decoration_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✨ Bezatish (Ha)", callback_data="decorate_yes"),
+            InlineKeyboardButton(text="❌ Oddiy (Yo'q)", callback_data="decorate_no")
+        ]
+    ])
+    return keyboard
+
+def get_days_keyboard():
+    buttons = []
+    row = []
+    for i in range(1, 10):
+        row.append(InlineKeyboardButton(text=f"{i} kun", callback_data=f"days_{i}"))
+        if len(row) == 3:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_confirm_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🚀 Tarqatish", callback_data="confirm_yes"),
+            InlineKeyboardButton(text="🚫 Bekor qilish", callback_data="confirm_no")
+        ]
+    ])
+    return keyboard
+
+# Bot guruhga qo'shilganda guruh ID sini saqlash
+@dp.my_chat_member()
+async def bot_added_to_group(update: types.ChatMemberUpdated):
+    if update.new_chat_member.status in ["member", "administrator"]:
+        groups_db.add(update.chat.id)
+
+# START Buyrug'i (Faqat adminlar uchun)
+@dp.message(F.text == "/start")
+async def start_cmd(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMINS:
+        await message.reply("⛔️ Sizga ushbu botdan foydalanish uchun ruxsat berilmagan.")
+        return
+
+    await message.answer(
+        "<b>@Yusufxonpro1 Siz uchun Tayyor!</b>\n\n"
+        "Yuk/E'lon matnini yoki rasmini yuboring:"
+    )
+    await state.set_state(PostState.waiting_for_content)
+
+# Yukni qabul qilish
+@dp.message(PostState.waiting_for_content)
+async def process_content(message: types.Message, state: FSMContext):
+    await state.update_data(content_message_id=message.message_id, chat_id=message.chat.id)
+    await message.answer("Yuk qabul qilindi! Post bezatilsinmi?", reply_markup=get_decoration_keyboard())
+    await state.set_state(PostState.waiting_for_decoration)
+
+# Bezatish tanlovi
+@dp.callback_query(PostState.waiting_for_decoration)
+async def process_decoration(call: types.CallbackQuery, state: FSMContext):
+    decorate = call.data == "decorate_yes"
+    await state.update_data(decorate=decorate)
+    await call.message.edit_text("E'lon necha kun tursin? (1 dan 9 kungacha tanlang):", reply_markup=get_days_keyboard())
+    await state.set_state(PostState.waiting_for_days)
+
+# Kunni tanlash
+@dp.callback_query(PostState.waiting_for_days)
+async def process_days(call: types.CallbackQuery, state: FSMContext):
+    days = int(call.data.split("_")[1])
+    await state.update_data(days=days)
+    await call.message.edit_text(f"E'lon <b>{days} kun</b> davomida tarqatiladi. Tasdiqlaysizmi?", reply_markup=get_confirm_keyboard())
+    await state.set_state(PostState.confirm_publish)
+
+# Avto-o'chirish funksiyasi
+async def auto_delete_job(chat_id, message_id, seconds):
+    await asyncio.sleep(seconds)
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
+
+# Tarqatishni tasdiqlash
+@dp.callback_query(PostState.confirm_publish)
+async def process_confirm(call: types.CallbackQuery, state: FSMContext):
+    if call.data == "confirm_no":
+        await call.message.edit_text("❌ Tarqatish bekor qilindi. Yangi yuk uchun /start bosing.")
+        await state.clear()
+        return
+
+    data = await state.get_data()
+    days = data['days']
+    decorate = data['decorate']
+    content_id = data['content_message_id']
+    delete_after_seconds = days * 86400  # Kunni sekundga aylantirish
+
+    await call.message.edit_text("⏳ Yuk tarqatilmoqda...")
+
+    sent_count = 0
+    for group_id in list(groups_db):
+        try:
+            sent_msg = await bot.forward_message(chat_id=group_id, from_chat_id=call.message.chat.id, message_id=content_id)
+            
+            if decorate:
+                await bot.send_message(
+                    group_id, 
+                    "📦 <b>YUK E'LONI</b>\n<i>Murojaat uchun adminga yozing.</i>", 
+                    reply_to_message_id=sent_msg.message_id
+                )
+
+            asyncio.create_task(auto_delete_job(group_id, sent_msg.message_id, delete_after_seconds))
+            sent_count += 1
+        except Exception:
+            continue
+
+    await call.message.answer(f"✅ Yuk muvaffaqiyatli {sent_count} ta guruh/kanalga tarqatildi va {days} kundan keyin avto-o'chiriladi.")
+    await state.clear()
+
+# Vercel Webhook API marshrutlari
 @app.post("/")
 @app.post("/api/index")
 async def handle_webhook(request: Request):
@@ -33,4 +162,4 @@ async def handle_webhook(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot is alive!"}
+    return {"status": "Bot is active!"}
