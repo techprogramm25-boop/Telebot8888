@@ -19,7 +19,7 @@ ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
 TARGET_GROUP_ID = -1003968416767
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
-BOT_USERNAME = "TeleProzona_Bot"  # Botingiz username'i
+BOT_USERNAME = "TeleProzona_Bot"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -44,6 +44,7 @@ class PostState(StatesGroup):
 
 class AdminState(StatesGroup):
     waiting_for_ban_target = State()
+    waiting_for_broadcast = State()
 
 PHONE_REGEX = r'(\+?998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\b\d{2}\s?\d{3}\s?\d{2}\s?\d{2}\b|\b\d{9}\b)'
 LINK_REGEX = r'(https?://[^\s]+|t\.me/[^\s]+|@[a-zA-Z0-9_]+)'
@@ -77,6 +78,7 @@ def get_add_members_keyboard():
 
 def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 Reklama yuborish", callback_data="admin_broadcast")],
         [
             InlineKeyboardButton(text="🚫 Ban qilish", callback_data="admin_ban_user"),
             InlineKeyboardButton(text="✅ Bandan chiqarish", callback_data="admin_unban_list")
@@ -108,10 +110,35 @@ async def start_cmd(message: types.Message, state: FSMContext):
         "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
         "👨‍💻 Admin: @Yusufxonpro1\n"
         "📢 Rasmiy kanal: @YukchiForwarder\n\n"
-        "<b>E'lon joylash uchun yuk matnini yuboring:</b>"
+        "<b>E'lon joylash uchun yuk matnini yoki rasmini yuboring:</b>"
     )
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
+
+# ADMIN: REKLAMA YUBORISH
+@dp.callback_query(F.data == "admin_broadcast")
+async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
+    if call.from_user.id not in ADMINS:
+        return
+    await call.message.answer(
+        "📢 <b>Reklama xabarini yuboring!</b>\n\n"
+        "Siz matn, rasm, video yoki fayl yuborishingiz mumkin. "
+        "Yuborgan xabaringiz to'g'ridan-to'g'ri guruhga reklamalaringiz qatoriga joylanadi."
+    )
+    await state.set_state(AdminState.waiting_for_broadcast)
+
+@dp.message(AdminState.waiting_for_broadcast)
+async def admin_broadcast_process(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMINS:
+        return
+
+    try:
+        await message.copy_to(chat_id=TARGET_GROUP_ID)
+        await message.answer("✅ <b>Reklama muvaffaqiyatli guruhga yuborildi!</b>")
+    except Exception as e:
+        await message.answer(f"❌ Reklama yuborishda xatolik: {e}")
+
+    await state.clear()
 
 @dp.callback_query(F.data == "admin_ban_user")
 async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
@@ -177,7 +204,7 @@ async def admin_unban_process(call: types.CallbackQuery):
 async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
     if await check_subscription(call.from_user.id):
         await call.message.delete()
-        await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yuborishingiz mumkin:")
+        await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yoki rasmini yuborishingiz mumkin:")
         await state.set_state(PostState.waiting_for_text)
     else:
         await call.answer("❌ Siz hali guruhga qo'shilmadingiz!", show_alert=True)
@@ -220,10 +247,12 @@ async def process_text(message: types.Message, state: FSMContext):
         return
 
     raw_text = message.text or message.caption or ""
+    photo_id = message.photo[-1].file_id if message.photo else None
+
     cleaned = re.sub(PHONE_REGEX, "", raw_text)
     cleaned = re.sub(LINK_REGEX, "", cleaned).strip()
 
-    await state.update_data(cleaned_text=cleaned)
+    await state.update_data(cleaned_text=cleaned, photo_id=photo_id)
     await message.answer("Endi murojaat uchun <b>Telefon raqamingizni</b> yuboring (Masalan: +998901234567):")
     await state.set_state(PostState.waiting_for_phone)
 
@@ -235,7 +264,7 @@ async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
         del user_add_req[user_id]
     
     await call.message.delete()
-    await call.message.answer("✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk matnini yuborishingiz mumkin:")
+    await call.message.answer("✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk matnini yoki rasmini yuborishingiz mumkin:")
     await state.set_state(PostState.waiting_for_text)
 
 @dp.message(PostState.waiting_for_phone)
@@ -244,6 +273,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     phone_number = message.text.strip()
     data = await state.get_data()
     cleaned_text = data.get("cleaned_text", "")
+    photo_id = data.get("photo_id")
 
     final_caption = (
         f"{cleaned_text}\n\n"
@@ -252,7 +282,6 @@ async def process_phone(message: types.Message, state: FSMContext):
         "📢 @YukchiForwarder"
     )
 
-    # 3 ta tugma joylashtirildi: Nomer ko'rish, Support Sayt va Botga o'tish
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📞 Nomer ko'rish", callback_data=f"show_phone:{phone_number}")],
         [
@@ -262,18 +291,27 @@ async def process_phone(message: types.Message, state: FSMContext):
     ])
 
     try:
-        await bot.send_message(
-            chat_id=TARGET_GROUP_ID,
-            text=final_caption,
-            reply_markup=keyboard
-        )
+        if photo_id:
+            await bot.send_photo(
+                chat_id=TARGET_GROUP_ID,
+                photo=photo_id,
+                caption=final_caption,
+                reply_markup=keyboard
+            )
+        else:
+            await bot.send_message(
+                chat_id=TARGET_GROUP_ID,
+                text=final_caption,
+                reply_markup=keyboard
+            )
+            
         user_posts_count[user_id] = user_posts_count.get(user_id, 0) + 1
         user_last_post_time[user_id] = datetime.now()
         
         if user_id in verified_users:
             verified_users.remove(user_id)
 
-        await message.answer("✅ E'loningiz muvaffaqiyatli guruhga joylandi! Yangi e'lon berish uchun matn yuboring.")
+        await message.answer("✅ E'loningiz muvaffaqiyatli guruhga joylandi! Yangi e'lon berish uchun matn yoki rasm yuboring.")
     except Exception as e:
         await message.answer(f"❌ Xatolik yuz berdi. Bot guruhda admin ekanligini tekshiring.\n{e}")
 
@@ -312,7 +350,7 @@ async def handle_group_messages(message: types.Message):
         ])
         
         warn_msg = await message.answer(
-            f"❗️ <b>{message.from_user.first_name}</b>, guruhga to'g'ridan-to'g'ri e'lon tashlash taqiqlangan!\n\n"
+            f"❗️ <b>{message.from_user.first_name}</b>, guruhga to'g'ridan-to me'yoridan ortiq e'lon tashlash taqiqlangan!\n\n"
             "E'lon joylash uchun pastdagi tugma orqali botga o'ting:",
             reply_markup=kb
         )
