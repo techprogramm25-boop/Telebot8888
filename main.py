@@ -19,6 +19,7 @@ ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
 TARGET_GROUP_ID = -1003968416767
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
+BOT_USERNAME = "TeleProzona_Bot"  # Botingiz username'i
 
 logging.basicConfig(level=logging.INFO)
 
@@ -251,10 +252,13 @@ async def process_phone(message: types.Message, state: FSMContext):
         "📢 @YukchiForwarder"
     )
 
-    # Nomer ko'rish va Support Sayt tugmalari qo'shildi
+    # 3 ta tugma joylashtirildi: Nomer ko'rish, Support Sayt va Botga o'tish
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📞 Nomer ko'rish", callback_data=f"show_phone:{phone_number}")],
-        [InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL)]
+        [
+            InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL),
+            InlineKeyboardButton(text="🤖 Botga o'tish", url=f"https://t.me/{BOT_USERNAME}")
+        ]
     ])
 
     try:
@@ -304,7 +308,7 @@ async def handle_group_messages(message: types.Message):
         await message.delete()
         
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 Bot orqali yuk yuborish", url="https://t.me/TeleProzona_Bot")]
+            [InlineKeyboardButton(text="🤖 Bot orqali yuk yuborish", url=f"https://t.me/{BOT_USERNAME}")]
         ])
         
         warn_msg = await message.answer(
