@@ -13,12 +13,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
-# Yangi tokeningiz joylashtirildi
 API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTWqo")
 
 ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
 TARGET_GROUP_ID = -1003968416767
+SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -101,14 +101,13 @@ async def start_cmd(message: types.Message, state: FSMContext):
         await message.answer("⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", reply_markup=get_sub_keyboard())
         return
 
-    # Matn to'liq va oqilona holatga keltirildi
     welcome_text = (
         "<b>Assalomu Alaykum!</b> 😎\n\n"
         "📢 Yukingiz bo‘lsa — guruhimizga joylang!\n"
         "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
         "👨‍💻 Admin: @Yusufxonpro1\n"
         "📢 Rasmiy kanal: @YukchiForwarder\n\n"
-        "<b>E'lon joylash uchun yuk matnini yoki rasmini yuboring:</b>"
+        "<b>E'lon joylash uchun yuk matnini yuboring:</b>"
     )
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
@@ -252,9 +251,10 @@ async def process_phone(message: types.Message, state: FSMContext):
         "📢 @YukchiForwarder"
     )
 
+    # Nomer ko'rish va Support Sayt tugmalari qo'shildi
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📞 Nomer ko'rish", callback_data=f"show_phone:{phone_number}")],
-        [InlineKeyboardButton(text="➕ Botni guruhga qo'shish", url="https://t.me/TeleProzona_Bot?startgroup=true")]
+        [InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL)]
     ])
 
     try:
