@@ -65,8 +65,8 @@ async def delete_message_after_delay(chat_id: int, message_id: int, delay_second
 
 def get_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Guruhga qo'shilish", url="https://t.me/YukchiForwarder")],
-        [InlineKeyboardButton(text="🔄 Tasdiqlash", callback_data="check_sub")]
+        [InlineKeyboardButton(text="📢 Guruhga/Kanalga qo'shilish", url="https://t.me/YukchiForwarder")],
+        [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_sub")]
     ])
 
 def get_add_members_keyboard():
@@ -98,20 +98,23 @@ async def start_cmd(message: types.Message, state: FSMContext):
             reply_markup=get_admin_keyboard()
         )
 
+    welcome_text = (
+        "<b>Assalomu Alaykum!</b> 😎\n\n"
+        "📢 Yukingiz bo‘lsa — guruhimizga joylang!\n"
+        "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
+        "👨‍💻 Admin: @Yusufxonpro1\n"
+        "📢 Rasmiy kanal: @YukchiForwarder\n\n"
+        "<b>E'lon joylash uchun yuk matnini yuboring:</b>"
+    )
+
     is_subscribed = await check_subscription(user_id)
     if not is_subscribed:
         await message.answer(
-            "⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling va tasdiqlang!</b>", 
+            f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
             reply_markup=get_sub_keyboard()
         )
         return
 
-    welcome_text = (
-        "<b>Assalomu Alaykum!</b> 😎\n\n"
-        "📦 Yukingiz e'lonini joylash uchun yuk matnini yoki rasmini yuboring!\n\n"
-        "📢 Rasmiy guruh: @YukchiForwarder\n"
-        "👨‍💻 Admin: @Yusufxonpro1"
-    )
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
 
@@ -206,7 +209,7 @@ async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
         await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yoki rasmini yuborishingiz mumkin:")
         await state.set_state(PostState.waiting_for_text)
     else:
-        await call.answer("❌ Siz hali guruhga qo'shilmadingiz! Guruhga a'zo bo'lib qayta harakat qiling.", show_alert=True)
+        await call.answer("❌ Siz hali guruhga qo'shilmandingiz!", show_alert=True)
 
 @dp.message(PostState.waiting_for_text)
 async def process_text(message: types.Message, state: FSMContext):
@@ -217,7 +220,7 @@ async def process_text(message: types.Message, state: FSMContext):
         return
 
     if not await check_subscription(user_id):
-        await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling va tasdiqlang!", reply_markup=get_sub_keyboard())
+        await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
     if user_id not in ADMINS and user_id in user_last_post_time:
@@ -233,7 +236,6 @@ async def process_text(message: types.Message, state: FSMContext):
 
     posts_count = user_posts_count.get(user_id, 0)
     
-    # Har 8 ta e'londan keyin qayta odam qo'shish so'raladi
     if user_id not in ADMINS and posts_count > 0 and posts_count % 8 == 0:
         if user_id not in user_add_req:
             user_add_req[user_id] = random.randint(2, 50)
