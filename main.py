@@ -34,7 +34,6 @@ app = FastAPI()
 
 user_posts_count = {}     
 user_add_req = {}        
-verified_users = set()    
 banned_users = {}         
 user_last_post_time = {}  
 
@@ -66,8 +65,8 @@ async def delete_message_after_delay(chat_id: int, message_id: int, delay_second
 
 def get_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Guruhga/Kanalga qo'shilish", url="https://t.me/YukchiForwarder")],
-        [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_sub")]
+        [InlineKeyboardButton(text="📢 Guruhga qo'shilish", url="https://t.me/YukchiForwarder")],
+        [InlineKeyboardButton(text="🔄 Tasdiqlash", callback_data="check_sub")]
     ])
 
 def get_add_members_keyboard():
@@ -101,16 +100,17 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     is_subscribed = await check_subscription(user_id)
     if not is_subscribed:
-        await message.answer("⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", reply_markup=get_sub_keyboard())
+        await message.answer(
+            "⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling va tasdiqlang!</b>", 
+            reply_markup=get_sub_keyboard()
+        )
         return
 
     welcome_text = (
         "<b>Assalomu Alaykum!</b> 😎\n\n"
-        "📢 Yukingiz bo‘lsa — guruhimizga joylang!\n"
-        "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
-        "👨‍💻 Admin: @Yusufxonpro1\n"
-        "📢 Rasmiy kanal: @YukchiForwarder\n\n"
-        "<b>E'lon joylash uchun yuk matnini yoki rasmini yuboring:</b>"
+        "📦 Yukingiz e'lonini joylash uchun yuk matnini yoki rasmini yuboring!\n\n"
+        "📢 Rasmiy guruh: @YukchiForwarder\n"
+        "👨‍💻 Admin: @Yusufxonpro1"
     )
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
@@ -122,8 +122,7 @@ async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
         return
     await call.message.answer(
         "📢 <b>Reklama xabarini yuboring!</b>\n\n"
-        "Siz matn, rasm, video yoki fayl yuborishingiz mumkin. "
-        "Yuborgan xabaringiz to'g'ridan-to'g'ri guruhga reklamalaringiz qatoriga joylanadi."
+        "Matn, rasm yoki video yuborishingiz mumkin:"
     )
     await state.set_state(AdminState.waiting_for_broadcast)
 
@@ -144,7 +143,7 @@ async def admin_broadcast_process(message: types.Message, state: FSMContext):
 async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
         return
-    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining <b>Username</b> yoki <b>ID / Nomerini</b> yuboring:")
+    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining <b>ID / Username</b> yuboring:")
     await state.set_state(AdminState.waiting_for_ban_target)
 
 @dp.message(AdminState.waiting_for_ban_target)
@@ -162,7 +161,7 @@ async def admin_ban_process(message: types.Message, state: FSMContext):
         except Exception:
             pass
 
-    await message.answer(f"✅ <b>{target}</b> muvaffaqiyatli BAN qilindi!")
+    await message.answer(f"✅ <b>{target}</b> BAN qilindi!")
     await state.clear()
 
 @dp.callback_query(F.data == "admin_unban_list")
@@ -171,7 +170,7 @@ async def admin_unban_list(call: types.CallbackQuery):
         return
 
     if not banned_users:
-        await call.message.answer("📜 Hozircha ban bo'lgan foydalanuvchilar yo'q.")
+        await call.message.answer("📜 Hozircha ban bo'lganlar yo'q.")
         return
 
     buttons = []
@@ -179,7 +178,7 @@ async def admin_unban_list(call: types.CallbackQuery):
         buttons.append([InlineKeyboardButton(text=f"🔓 {uname}", callback_data=f"unban:{uid}")])
     
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
-    await call.message.answer("Bandan chiqarmoqchi bo'lgan foydalanuvchini tanlang:", reply_markup=kb)
+    await call.message.answer("Bandan chiqarish uchun tanlang:", reply_markup=kb)
 
 @dp.callback_query(F.data.startswith("unban:"))
 async def admin_unban_process(call: types.CallbackQuery):
@@ -196,7 +195,7 @@ async def admin_unban_process(call: types.CallbackQuery):
                 await bot.unban_chat_member(chat_id=TARGET_GROUP_ID, user_id=uid)
             except Exception:
                 pass
-        await call.message.edit_text("✅ Foydalanuvchi bandan chiqarildi!")
+        await call.message.edit_text("✅ Bandan chiqarildi!")
     else:
         await call.answer("Topilmadi.", show_alert=True)
 
@@ -207,7 +206,7 @@ async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
         await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yoki rasmini yuborishingiz mumkin:")
         await state.set_state(PostState.waiting_for_text)
     else:
-        await call.answer("❌ Siz hali guruhga qo'shilmadingiz!", show_alert=True)
+        await call.answer("❌ Siz hali guruhga qo'shilmadingiz! Guruhga a'zo bo'lib qayta harakat qiling.", show_alert=True)
 
 @dp.message(PostState.waiting_for_text)
 async def process_text(message: types.Message, state: FSMContext):
@@ -218,7 +217,7 @@ async def process_text(message: types.Message, state: FSMContext):
         return
 
     if not await check_subscription(user_id):
-        await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
+        await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling va tasdiqlang!", reply_markup=get_sub_keyboard())
         return
 
     if user_id not in ADMINS and user_id in user_last_post_time:
@@ -234,13 +233,15 @@ async def process_text(message: types.Message, state: FSMContext):
 
     posts_count = user_posts_count.get(user_id, 0)
     
-    if user_id not in ADMINS and posts_count > 8 and user_id not in verified_users:
+    # Har 8 ta e'londan keyin qayta odam qo'shish so'raladi
+    if user_id not in ADMINS and posts_count > 0 and posts_count % 8 == 0:
         if user_id not in user_add_req:
             user_add_req[user_id] = random.randint(2, 50)
         
         req_count = user_add_req[user_id]
         await message.answer(
-            f"🛑 <b>Diqqat!</b> Siz 8 tadan ko'p e'lon joyladingiz. Davom etish uchun guruhga kamida <b>{req_count} ta odam</b> qo'shishingiz kerak!\n\n"
+            f"🛑 <b>Diqqat!</b> Siz {posts_count} ta e'lon joyladingiz.\n\n"
+            f"Yangi e'lon joylashni davom ettirish uchun guruhga kamida <b>{req_count} ta odam</b> qo'shishingiz kerak!\n\n"
             "Odam qo'shib bo'lgach, pastdagi tekshirish tugmasini bosing:",
             reply_markup=get_add_members_keyboard()
         )
@@ -259,12 +260,11 @@ async def process_text(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "check_added_members")
 async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
-    verified_users.add(user_id)
     if user_id in user_add_req:
         del user_add_req[user_id]
     
     await call.message.delete()
-    await call.message.answer("✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk matnini yoki rasmini yuborishingiz mumkin:")
+    await call.message.answer("✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk e'lonini yuborishingiz mumkin:")
     await state.set_state(PostState.waiting_for_text)
 
 @dp.message(PostState.waiting_for_phone)
@@ -307,9 +307,6 @@ async def process_phone(message: types.Message, state: FSMContext):
             
         user_posts_count[user_id] = user_posts_count.get(user_id, 0) + 1
         user_last_post_time[user_id] = datetime.now()
-        
-        if user_id in verified_users:
-            verified_users.remove(user_id)
 
         await message.answer("✅ E'loningiz muvaffaqiyatli guruhga joylandi! Yangi e'lon berish uchun matn yoki rasm yuboring.")
     except Exception as e:
@@ -350,7 +347,7 @@ async def handle_group_messages(message: types.Message):
         ])
         
         warn_msg = await message.answer(
-            f"❗️ <b>{message.from_user.first_name}</b>, guruhga to'g'ridan-to me'yoridan ortiq e'lon tashlash taqiqlangan!\n\n"
+            f"❗️ <b>{message.from_user.first_name}</b>, guruhga to'g'ridan-to'g'ri e'lon tashlash taqiqlangan!\n\n"
             "E'lon joylash uchun pastdagi tugma orqali botga o'ting:",
             reply_markup=kb
         )
