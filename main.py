@@ -209,7 +209,7 @@ async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
         await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yoki rasmini yuborishingiz mumkin:")
         await state.set_state(PostState.waiting_for_text)
     else:
-        await call.answer("❌ Siz hali guruhga qo'shilmandingiz!", show_alert=True)
+        await call.answer("❌ Siz hali guruhga qo'shilmadingiz!", show_alert=True)
 
 @dp.message(PostState.waiting_for_text)
 async def process_text(message: types.Message, state: FSMContext):
@@ -358,17 +358,20 @@ async def handle_group_messages(message: types.Message):
     except Exception:
         pass
 
+# YANGILANGAN WEBHOOK HANDLER
 @app.post("/")
 @app.post("/api/index")
 async def handle_webhook(request: Request):
     try:
         data = await request.json()
-        update = Update(**data)
+        update = Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
         return {"status": "ok"}
     except Exception as e:
+        logging.error(f"Webhook error: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.get("/")
+@app.get("/api/index")
 async def root():
-    return {"status": "Bot faol ishlamoqda!"}
+    return {"status": "Bot serveri faol va ishlamoqda!"}
