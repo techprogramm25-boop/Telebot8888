@@ -24,7 +24,8 @@ TARGET_GROUP_ID = -1003968416767
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
 BOT_USERNAME = "TeleProzona_Bot"
 
-START_IMAGE_URL = "https://raw.githubusercontent.com/yusufxon71/YukchiForwarder/main/yulkchi%20forwarder.jfif"
+# Telegram'ga yuklangan start rasmining file_id'si
+START_FILE_ID = "AgACAgIAAxkBAAEuyGBqqWVoUFlcZvS2XzrL-2HrWCiSlAACdSJrG-4fSEksooFC92bNWAEAAwIAA3kAAz0E"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -62,7 +63,6 @@ async def check_subscription(user_id: int) -> bool:
         logging.error(f"Subscription check error: {e}")
         return False
 
-# Background task function
 async def delete_message_after_delay(chat_id: int, message_id: int, delay_seconds: int = 3600):
     await asyncio.sleep(delay_seconds)
     try:
@@ -101,7 +101,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     if user_id in ADMINS:
         await message.answer(
-            "👨‍💻 <b>Xush kelibsiz Admin!</b>\n\nBoshqaruv paneli:",
+            "👨‍💻 <b>@Yusufxonpro1 Siz uchun Tayyor!</b>\n\nBoshqaruv paneli:",
             reply_markup=get_admin_keyboard()
         )
 
@@ -115,29 +115,18 @@ async def start_cmd(message: types.Message, state: FSMContext):
     )
 
     is_subscribed = await check_subscription(user_id)
-    
-    try:
-        if not is_subscribed:
-            await message.answer_photo(
-                photo=START_IMAGE_URL,
-                caption=f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
-                reply_markup=get_sub_keyboard()
-            )
-            return
+    keyboard = None if is_subscribed else get_sub_keyboard()
+    caption_text = welcome_text if is_subscribed else f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>"
 
+    try:
         await message.answer_photo(
-            photo=START_IMAGE_URL,
-            caption=welcome_text
+            photo=START_FILE_ID,
+            caption=caption_text,
+            reply_markup=keyboard
         )
     except Exception as e:
-        logging.error(f"Image send error: {e}")
-        if not is_subscribed:
-            await message.answer(
-                f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
-                reply_markup=get_sub_keyboard()
-            )
-            return
-        await message.answer(welcome_text)
+        logging.error(f"Rasm yuborishda xatolik: {e}")
+        await message.answer(text=caption_text, reply_markup=keyboard)
 
     await state.set_state(PostState.waiting_for_text)
 
@@ -393,25 +382,24 @@ async def handle_group_messages(message: types.Message, background_tasks: Backgr
             reply_markup=kb
         )
         
-        # Vercel uchun xavfsiz background task
         background_tasks.add_task(delete_message_after_delay, TARGET_GROUP_ID, warn_msg.message_id, 3600)
     except Exception:
         pass
 
-# WEBHOOK HANDLERS FOR VERCEL
+# Webhook FastAPI Route handlerlari (Vercel uchun)
 @app.post("/")
 @app.post("/api/index")
-async def handle_webhook(request: Request):
+async def process_webhook(request: Request):
     try:
-        data = await request.json()
-        update = Update.model_validate(data, context={"bot": bot})
+        update_data = await request.json()
+        update = Update.model_validate(update_data, context={"bot": bot})
         await dp.feed_update(bot, update)
         return JSONResponse(content={"status": "ok"})
     except Exception as e:
-        logging.error(f"Webhook error: {e}")
+        logging.error(f"Webhook processing error: {e}")
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 @app.get("/")
 @app.get("/api/index")
 async def root():
-    return JSONResponse(content={"status": "Bot serveri faol va ishlamoqda!"})
+    return JSONResponse(content={"status": "Bot serveri Vercel'da faol va ishlamoqda!"})
