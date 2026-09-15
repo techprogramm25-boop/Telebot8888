@@ -1,4 +1,4 @@
-import os
+33import os
 import re
 import logging
 import random
@@ -21,6 +21,9 @@ REQUIRED_CHANNEL = "@YukchiForwarder"
 TARGET_GROUP_ID = -1003968416767
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
 BOT_USERNAME = "TeleProzona_Bot"
+
+# GitHub'dagi YukchiForwarder rasmining to'g'ridan-to'g'ri havolasi (URL):
+START_IMAGE_URL = "https://raw.githubusercontent.com/yusufxon71/YukchiForwarder/main/yulkchi%20forwarder.jfif"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -85,6 +88,7 @@ def get_admin_keyboard():
         ]
     ])
 
+# TEZKOR /START VA RASMLI XABAR
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -95,7 +99,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     if user_id in ADMINS:
         await message.answer(
-            "👨‍💻 <b>Hush kelibsiz Admin!</b>\n\nBoshqaruv paneli:",
+            "👨‍💻 <b>Xush kelibsiz Admin!</b>\n\nBoshqaruv paneli:",
             reply_markup=get_admin_keyboard()
         )
 
@@ -109,17 +113,33 @@ async def start_cmd(message: types.Message, state: FSMContext):
     )
 
     is_subscribed = await check_subscription(user_id)
-    if not is_subscribed:
-        await message.answer(
-            f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
-            reply_markup=get_sub_keyboard()
-        )
-        return
+    
+    try:
+        if not is_subscribed:
+            await message.answer_photo(
+                photo=START_IMAGE_URL,
+                caption=f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
+                reply_markup=get_sub_keyboard()
+            )
+            return
 
-    await message.answer(welcome_text)
+        await message.answer_photo(
+            photo=START_IMAGE_URL,
+            caption=welcome_text
+        )
+    except Exception:
+        # Rasm yuklashda muammo bo'lsa, zudlik bilan matnning o'zini yuboradi
+        if not is_subscribed:
+            await message.answer(
+                f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
+                reply_markup=get_sub_keyboard()
+            )
+            return
+        await message.answer(welcome_text)
+
     await state.set_state(PostState.waiting_for_text)
 
-# ADMIN /PIN COMMAND (Guruhdagi xabarni mahkamlash)
+# ADMIN /PIN COMMAND
 @dp.message(Command("pin"), F.chat.id == TARGET_GROUP_ID)
 async def pin_cmd(message: types.Message):
     if message.from_user.id not in ADMINS:
@@ -239,14 +259,15 @@ async def process_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
+    # 12 SONIYALIK CHEKLOV (COOLDOWN)
     if user_id not in ADMINS and user_id in user_last_post_time:
         last_time = user_last_post_time[user_id]
         time_diff = datetime.now() - last_time
-        if time_diff < timedelta(hours=1):
-            remaining_minutes = int((timedelta(hours=1) - time_diff).total_seconds() // 60)
+        if time_diff < timedelta(seconds=12):
+            remaining_seconds = int((timedelta(seconds=12) - time_diff).total_seconds())
             await message.answer(
-                f"⏱ <b>Siz 1 soatda faqat 1 marta e'lon berishingiz mumkin!</b>\n\n"
-                f"Yangi e'lon joylash uchun yana <b>{remaining_minutes} daqiqa</b> kuting."
+                f"⏱ <b>Yangi e'lon berish uchun {remaining_seconds} soniya kuting!</b>\n\n"
+                "Har bir e'lon orasida 12 soniya tanaffus bo'lishi kerak."
             )
             return
 
@@ -340,13 +361,11 @@ async def show_phone_handler(call: types.CallbackQuery):
 # GURUH XABARLARINI NAZORAT QILISH
 @dp.message(F.chat.id == TARGET_GROUP_ID)
 async def handle_group_messages(message: types.Message):
-    # System xabarlarni (odam qo'shildi/chiqdi) va Botning o'z xabarlarini o'tkazib yuborish
     if message.new_chat_members or message.left_chat_member or message.pinned_message or message.from_user.is_bot:
         return
 
     user_id = message.from_user.id
 
-    # ADMINLARNING HAR QANDAY XABARI (Inline tugmali reklamalar, matn, media) TEGINILMAYDI
     if user_id in ADMINS:
         return
 
