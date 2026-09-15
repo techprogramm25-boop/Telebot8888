@@ -4,8 +4,7 @@ import logging
 import random
 import asyncio
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.client.default import DefaultBotProperties
@@ -13,9 +12,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
-from aiogram.filters import Command
 
-# Vercel Environment Variables'dan tokenni olish
 API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTWqo")
 
 ADMINS = [6977836294, 8409259397]
@@ -56,8 +53,7 @@ async def check_subscription(user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
         return member.status in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.MEMBER]
-    except Exception as e:
-        logging.error(f"Subscription check error: {e}")
+    except Exception:
         return False
 
 async def delete_message_after_delay(chat_id: int, message_id: int, delay_seconds: int = 3600):
@@ -88,7 +84,7 @@ def get_admin_keyboard():
         ]
     ])
 
-@dp.message(Command("start"))
+@dp.message(F.text == "/start")
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     
@@ -98,7 +94,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     if user_id in ADMINS:
         await message.answer(
-            "👨‍💻 <b>@Yusufxonpro1 Siz uchun Tayyor!</b>\n\nBoshqaruv paneli:",
+            "👨‍💻 <b>Hush kelibsiz Admin!</b>\n\nBoshqaruv paneli:",
             reply_markup=get_admin_keyboard()
         )
 
@@ -112,33 +108,24 @@ async def start_cmd(message: types.Message, state: FSMContext):
     )
 
     is_subscribed = await check_subscription(user_id)
-    keyboard = None if is_subscribed else get_sub_keyboard()
-    final_text = welcome_text if is_subscribed else f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>"
-
-    await message.answer(text=final_text, reply_markup=keyboard)
-    await state.set_state(PostState.waiting_for_text)
-
-@dp.message(Command("pin"), F.chat.id == TARGET_GROUP_ID)
-async def pin_cmd(message: types.Message):
-    if message.from_user.id not in ADMINS:
+    if not is_subscribed:
+        await message.answer(
+            f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
+            reply_markup=get_sub_keyboard()
+        )
         return
 
-    if message.reply_to_message:
-        try:
-            await bot.pin_chat_message(chat_id=TARGET_GROUP_ID, message_id=message.reply_to_message.message_id)
-            await message.reply("📌 Xabar muvaffaqiyatli mahkamlandi!")
-        except Exception as e:
-            await message.reply(f"❌ Xabarni mahkamlashda xatolik: {e}")
-    else:
-        await message.reply("📌 Xabarni mahkamlash uchun unga reply qilib /pin yozing.")
+    await message.answer(welcome_text)
+    await state.set_state(PostState.waiting_for_text)
 
+# ADMIN: REKLAMA YUBORISH
 @dp.callback_query(F.data == "admin_broadcast")
 async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
         return
     await call.message.answer(
         "📢 <b>Reklama xabarini yuboring!</b>\n\n"
-        "Matn, rasm, video yoki tugmali xabar yuborishingiz mumkin:"
+        "Matn, rasm yoki video yuborishingiz mumkin:"
     )
     await state.set_state(AdminState.waiting_for_broadcast)
 
@@ -239,11 +226,11 @@ async def process_text(message: types.Message, state: FSMContext):
     if user_id not in ADMINS and user_id in user_last_post_time:
         last_time = user_last_post_time[user_id]
         time_diff = datetime.now() - last_time
-        if time_diff < timedelta(seconds=12):
-            remaining_seconds = int((timedelta(seconds=12) - time_diff).total_seconds())
+        if time_diff < timedelta(hours=1):
+            remaining_minutes = int((timedelta(hours=1) - time_diff).total_seconds() // 60)
             await message.answer(
-                f"⏱ <b>Yangi e'lon berish uchun {remaining_seconds} soniya kuting!</b>\n\n"
-                "Har bir e'lon orasida 12 soniya tanaffus bo'lishi kerak."
+                f"⏱ <b>Siz 1 soatda faqat 1 marta e'lon berishingiz mumkin!</b>\n\n"
+                f"Yangi e'lon joylash uchun yana <b>{remaining_minutes} daqiqa</b> kuting."
             )
             return
 
@@ -335,10 +322,7 @@ async def show_phone_handler(call: types.CallbackQuery):
     await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
 
 @dp.message(F.chat.id == TARGET_GROUP_ID)
-async def handle_group_messages(message: types.Message, background_tasks: BackgroundTasks):
-    if message.new_chat_members or message.left_chat_member or message.pinned_message or message.from_user.is_bot:
-        return
-
+async def handle_group_messages(message: types.Message):
     user_id = message.from_user.id
 
     if user_id in ADMINS:
@@ -370,24 +354,24 @@ async def handle_group_messages(message: types.Message, background_tasks: Backgr
             reply_markup=kb
         )
         
-        background_tasks.add_task(delete_message_after_delay, TARGET_GROUP_ID, warn_msg.message_id, 3600)
+        asyncio.create_task(delete_message_after_delay(TARGET_GROUP_ID, warn_msg.message_id, 3600))
     except Exception:
         pass
 
-# Universal Webhook Route
+# WEBHOOK HANDLER
 @app.post("/")
 @app.post("/api/index")
-async def process_webhook(request: Request):
+async def handle_webhook(request: Request):
     try:
-        update_data = await request.json()
-        update = Update.model_validate(update_data, context={"bot": bot})
+        data = await request.json()
+        update = Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
-        return JSONResponse(content={"status": "ok"})
+        return {"status": "ok"}
     except Exception as e:
         logging.error(f"Webhook error: {e}")
-        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+        return {"status": "error", "message": str(e)}
 
 @app.get("/")
 @app.get("/api/index")
 async def root():
-    return JSONResponse(content={"status": "Bot serveri Vercel'da ishlamoqda!"})
+    return {"status": "Bot serveri faol va ishlamoqda!"}
