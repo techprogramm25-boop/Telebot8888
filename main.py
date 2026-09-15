@@ -12,6 +12,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
+from aiogram.filters import Command
 
 API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTWqo")
 
@@ -84,7 +85,7 @@ def get_admin_keyboard():
         ]
     ])
 
-@dp.message(F.text == "/start")
+@dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     
@@ -118,6 +119,21 @@ async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
 
+# ADMIN /PIN COMMAND (Guruhdagi xabarni mahkamlash)
+@dp.message(Command("pin"), F.chat.id == TARGET_GROUP_ID)
+async def pin_cmd(message: types.Message):
+    if message.from_user.id not in ADMINS:
+        return
+
+    if message.reply_to_message:
+        try:
+            await bot.pin_chat_message(chat_id=TARGET_GROUP_ID, message_id=message.reply_to_message.message_id)
+            await message.reply("📌 Xabar muvaffaqiyatli mahkamlandi!")
+        except Exception as e:
+            await message.reply(f"❌ Xabarni mahkamlashda xatolik: {e}")
+    else:
+        await message.reply("📌 Xabarni mahkamlash uchun unga reply qilib /pin yozing.")
+
 # ADMIN: REKLAMA YUBORISH
 @dp.callback_query(F.data == "admin_broadcast")
 async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
@@ -125,7 +141,7 @@ async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
         return
     await call.message.answer(
         "📢 <b>Reklama xabarini yuboring!</b>\n\n"
-        "Matn, rasm yoki video yuborishingiz mumkin:"
+        "Matn, rasm, video yoki tugmali xabar yuborishingiz mumkin:"
     )
     await state.set_state(AdminState.waiting_for_broadcast)
 
@@ -321,10 +337,16 @@ async def show_phone_handler(call: types.CallbackQuery):
     phone = call.data.split("show_phone:")[1]
     await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
 
+# GURUH XABARLARINI NAZORAT QILISH
 @dp.message(F.chat.id == TARGET_GROUP_ID)
 async def handle_group_messages(message: types.Message):
+    # System xabarlarni (odam qo'shildi/chiqdi) va Botning o'z xabarlarini o'tkazib yuborish
+    if message.new_chat_members or message.left_chat_member or message.pinned_message or message.from_user.is_bot:
+        return
+
     user_id = message.from_user.id
 
+    # ADMINLARNING HAR QANDAY XABARI (Inline tugmali reklamalar, matn, media) TEGINILMAYDI
     if user_id in ADMINS:
         return
 
@@ -358,7 +380,7 @@ async def handle_group_messages(message: types.Message):
     except Exception:
         pass
 
-# YANGILANGAN WEBHOOK HANDLER
+# WEBHOOK HANDLER
 @app.post("/")
 @app.post("/api/index")
 async def handle_webhook(request: Request):
