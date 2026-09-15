@@ -24,9 +24,6 @@ TARGET_GROUP_ID = -1003968416767
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
 BOT_USERNAME = "TeleProzona_Bot"
 
-# Telegram'ga yuklangan start rasmining file_id'si
-START_FILE_ID = "AgACAgIAAxkBAAEuyGBqqWVoUFlcZvS2XzrL-2HrWCiSlAACdSJrG-4fSEksooFC92bNWAEAAwIAA3kAAz0E"
-
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(
@@ -116,18 +113,9 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     is_subscribed = await check_subscription(user_id)
     keyboard = None if is_subscribed else get_sub_keyboard()
-    caption_text = welcome_text if is_subscribed else f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>"
+    final_text = welcome_text if is_subscribed else f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>"
 
-    try:
-        await message.answer_photo(
-            photo=START_FILE_ID,
-            caption=caption_text,
-            reply_markup=keyboard
-        )
-    except Exception as e:
-        logging.error(f"Rasm yuborishda xatolik: {e}")
-        await message.answer(text=caption_text, reply_markup=keyboard)
-
+    await message.answer(text=final_text, reply_markup=keyboard)
     await state.set_state(PostState.waiting_for_text)
 
 @dp.message(Command("pin"), F.chat.id == TARGET_GROUP_ID)
@@ -386,7 +374,7 @@ async def handle_group_messages(message: types.Message, background_tasks: Backgr
     except Exception:
         pass
 
-# Webhook FastAPI Route handlerlari (Vercel uchun)
+# Universal Webhook Route
 @app.post("/")
 @app.post("/api/index")
 async def process_webhook(request: Request):
@@ -396,10 +384,10 @@ async def process_webhook(request: Request):
         await dp.feed_update(bot, update)
         return JSONResponse(content={"status": "ok"})
     except Exception as e:
-        logging.error(f"Webhook processing error: {e}")
+        logging.error(f"Webhook error: {e}")
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 @app.get("/")
 @app.get("/api/index")
 async def root():
-    return JSONResponse(content={"status": "Bot serveri Vercel'da faol va ishlamoqda!"})
+    return JSONResponse(content={"status": "Bot serveri Vercel'da ishlamoqda!"})
