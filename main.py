@@ -107,6 +107,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
         "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
         "👨‍💻 Admin: @Yusufxonpro1\n"
         "📢 Rasmiy kanal: @YukchiForwarder\n\n"
+        "📢 People Kanal @YukchiForwarderPeople /n/n"
         "<b>E'lon joylash uchun yuk matnini yuboring:</b>"
     )
 
@@ -279,7 +280,7 @@ async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
     await call.message.delete()
     await call.message.answer("✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk e'lonini yuborishingiz mumkin:")
     await state.set_state(PostState.waiting_for_text)
-
+*
 @dp.message(PostState.waiting_for_phone)
 async def process_phone(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -293,6 +294,7 @@ async def process_phone(message: types.Message, state: FSMContext):
         "_____________________\n"
         "👨‍💻 @Yusufxonpro1 Admin\n"
         "📢 @YukchiForwarder"
+        "🐱‍💻 @YukchiForwarderPeople "
     )
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
