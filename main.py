@@ -68,13 +68,15 @@ async def delete_message_after_delay(chat_id: int, message_id: int, delay_second
 
 def get_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Guruhga/Kanalga qo'shilish", url="https://t.me/YukchiForwarder")],
+        [InlineKeyboardButton(text="📢 1-Guruhga qo'shilish", url="https://t.me/YukchiForwarder")],
+        [InlineKeyboardButton(text="📢 2-Guruhga qo'shilish (@YukchiForwarderPeople)", url="https://t.me/YukchiForwarderPeople")],
         [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_sub")]
     ])
 
 def get_add_members_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Guruhga odam qo'shish", url="https://t.me/YukchiForwarder")],
+        [InlineKeyboardButton(text="➕ 1-Guruhga odam qo'shish", url="https://t.me/YukchiForwarder")],
+        [InlineKeyboardButton(text="➕ 2-Guruhga odam qo'shish", url="https://t.me/YukchiForwarderPeople")],
         [InlineKeyboardButton(text="🔄 Qo'shdim, tekshirish", callback_data="check_added_members")]
     ])
 
@@ -105,16 +107,16 @@ async def start_cmd(message: types.Message, state: FSMContext):
         "<b>Assalomu Alaykum!</b> 😎\n\n"
         "📢 Yukingiz bo‘lsa — guruhlarimizga joylang!\n"
         "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
-        "👨‍💻 Admin: @Yusufxonpro1\n"
-        "📢 Rasmiy kanal: @YukchiForwarder\n\n"
-        "📢 People Kanal @YukchiForwarderPeople /n/n"
+        "👨‍💻 <b>Admin:</b> @Yusufxonpro1\n\n"
+        "📢 <b>Rasmiy kanalimiz:</b> @YukchiForwarder\n"
+        "📢 <b>Rasmiy Kanalimiz:</b> @YukchiForwarderPeople\n\n"
         "<b>E'lon joylash uchun yuk matnini yuboring:</b>"
     )
 
     is_subscribed = await check_subscription(user_id)
     if not is_subscribed:
         await message.answer(
-            f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
+            f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhlarimizga qo'shiling!</b>", 
             reply_markup=get_sub_keyboard()
         )
         return
@@ -231,7 +233,6 @@ async def process_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
-    # Har 3 daqiqalik vaqt cheklovi
     if user_id not in ADMINS and user_id in user_last_post_time:
         last_time = user_last_post_time[user_id]
         time_diff = datetime.now() - last_time
@@ -280,7 +281,7 @@ async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
     await call.message.delete()
     await call.message.answer("✅ Rahmat! Odam qo'shilgani tasdiqlandi. Endi yuk e'lonini yuborishingiz mumkin:")
     await state.set_state(PostState.waiting_for_text)
-*
+
 @dp.message(PostState.waiting_for_phone)
 async def process_phone(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -289,12 +290,13 @@ async def process_phone(message: types.Message, state: FSMContext):
     cleaned_text = data.get("cleaned_text", "")
     photo_id = data.get("photo_id")
 
+    # E'lon tagida Admin va ikkala kanal ko'rsatiladigan qism
     final_caption = (
         f"{cleaned_text}\n\n"
         "_____________________\n"
-        "👨‍💻 @Yusufxonpro1 Admin\n"
-        "📢 @YukchiForwarder"
-        "🐱‍💻 @YukchiForwarderPeople "
+        "👨‍💻 <b>Admin:</b> @Yusufxonpro1\n"
+        "📢 <b>Rasmiy kanalimiz:</b> @YukchiForwarder\n"
+        "📢 <b>Rasmiy Kanalimiz:</b> @YukchiForwarderPeople"
     )
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -306,7 +308,6 @@ async def process_phone(message: types.Message, state: FSMContext):
     ])
 
     try:
-        # E'lonni ikkala guruhga birdek yuborish
         for group_id in TARGET_GROUPS:
             if photo_id:
                 await bot.send_photo(
@@ -336,7 +337,6 @@ async def show_phone_handler(call: types.CallbackQuery):
     phone = call.data.split("show_phone:")[1]
     await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
 
-# Ikkala guruhdagi xabarlarni ham nazorat qilish
 @dp.message(lambda message: message.chat.id in TARGET_GROUPS)
 async def handle_group_messages(message: types.Message):
     user_id = message.from_user.id
