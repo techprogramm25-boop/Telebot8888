@@ -1,10 +1,11 @@
-33import os
+import os
 import re
 import logging
 import random
 import asyncio
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi.responses import JSONResponse
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.client.default import DefaultBotProperties
@@ -14,6 +15,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from aiogram.filters import Command
 
+# Vercel Environment Variables'dan tokenni olish
 API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTWqo")
 
 ADMINS = [6977836294, 8409259397]
@@ -22,7 +24,6 @@ TARGET_GROUP_ID = -1003968416767
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
 BOT_USERNAME = "TeleProzona_Bot"
 
-# GitHub'dagi YukchiForwarder rasmining to'g'ridan-to'g'ri havolasi (URL):
 START_IMAGE_URL = "https://raw.githubusercontent.com/yusufxon71/YukchiForwarder/main/yulkchi%20forwarder.jfif"
 
 logging.basicConfig(level=logging.INFO)
@@ -57,9 +58,11 @@ async def check_subscription(user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
         return member.status in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.MEMBER]
-    except Exception:
+    except Exception as e:
+        logging.error(f"Subscription check error: {e}")
         return False
 
+# Background task function
 async def delete_message_after_delay(chat_id: int, message_id: int, delay_seconds: int = 3600):
     await asyncio.sleep(delay_seconds)
     try:
@@ -88,7 +91,6 @@ def get_admin_keyboard():
         ]
     ])
 
-# TEZKOR /START VA RASMLI XABAR
 @dp.message(Command("start"))
 async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -127,8 +129,8 @@ async def start_cmd(message: types.Message, state: FSMContext):
             photo=START_IMAGE_URL,
             caption=welcome_text
         )
-    except Exception:
-        # Rasm yuklashda muammo bo'lsa, zudlik bilan matnning o'zini yuboradi
+    except Exception as e:
+        logging.error(f"Image send error: {e}")
         if not is_subscribed:
             await message.answer(
                 f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhimizga qo'shiling!</b>", 
@@ -139,7 +141,6 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     await state.set_state(PostState.waiting_for_text)
 
-# ADMIN /PIN COMMAND
 @dp.message(Command("pin"), F.chat.id == TARGET_GROUP_ID)
 async def pin_cmd(message: types.Message):
     if message.from_user.id not in ADMINS:
@@ -154,7 +155,6 @@ async def pin_cmd(message: types.Message):
     else:
         await message.reply("📌 Xabarni mahkamlash uchun unga reply qilib /pin yozing.")
 
-# ADMIN: REKLAMA YUBORISH
 @dp.callback_query(F.data == "admin_broadcast")
 async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
@@ -259,7 +259,6 @@ async def process_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
-    # 12 SONIYALIK CHEKLOV (COOLDOWN)
     if user_id not in ADMINS and user_id in user_last_post_time:
         last_time = user_last_post_time[user_id]
         time_diff = datetime.now() - last_time
@@ -358,9 +357,8 @@ async def show_phone_handler(call: types.CallbackQuery):
     phone = call.data.split("show_phone:")[1]
     await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
 
-# GURUH XABARLARINI NAZORAT QILISH
 @dp.message(F.chat.id == TARGET_GROUP_ID)
-async def handle_group_messages(message: types.Message):
+async def handle_group_messages(message: types.Message, background_tasks: BackgroundTasks):
     if message.new_chat_members or message.left_chat_member or message.pinned_message or message.from_user.is_bot:
         return
 
@@ -395,11 +393,12 @@ async def handle_group_messages(message: types.Message):
             reply_markup=kb
         )
         
-        asyncio.create_task(delete_message_after_delay(TARGET_GROUP_ID, warn_msg.message_id, 3600))
+        # Vercel uchun xavfsiz background task
+        background_tasks.add_task(delete_message_after_delay, TARGET_GROUP_ID, warn_msg.message_id, 3600)
     except Exception:
         pass
 
-# WEBHOOK HANDLER
+# WEBHOOK HANDLERS FOR VERCEL
 @app.post("/")
 @app.post("/api/index")
 async def handle_webhook(request: Request):
@@ -407,12 +406,12 @@ async def handle_webhook(request: Request):
         data = await request.json()
         update = Update.model_validate(data, context={"bot": bot})
         await dp.feed_update(bot, update)
-        return {"status": "ok"}
+        return JSONResponse(content={"status": "ok"})
     except Exception as e:
         logging.error(f"Webhook error: {e}")
-        return {"status": "error", "message": str(e)}
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 @app.get("/")
 @app.get("/api/index")
 async def root():
-    return {"status": "Bot serveri faol va ishlamoqda!"}
+    return JSONResponse(content={"status": "Bot serveri faol va ishlamoqda!"})*
