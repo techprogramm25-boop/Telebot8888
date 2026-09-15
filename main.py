@@ -118,7 +118,6 @@ async def start_cmd(message: types.Message, state: FSMContext):
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
 
-# ADMIN: REKLAMA YUBORISH
 @dp.callback_query(F.data == "admin_broadcast")
 async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
@@ -329,7 +328,7 @@ async def handle_group_messages(message: types.Message):
         return
 
     text = (message.text or message.caption or "").lower()
-    has_spam_word = any(word in text for word in SPOSUM_WORDS if 'SPOSUM_WORDS' in globals() or word in SPAM_WORDS)
+    has_spam_word = any(word in text for word in SPAM_WORDS)
     has_link = bool(re.search(LINK_REGEX, text))
 
     if has_spam_word or has_link:
@@ -358,7 +357,6 @@ async def handle_group_messages(message: types.Message):
     except Exception:
         pass
 
-# Webhook Endpoint (Vercel talab qiladigan minimal FastAPI qismi)
 @app.post("/")
 async def handle_webhook(request: Request):
     try:
@@ -372,7 +370,4 @@ async def handle_webhook(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot serveri ishlamoqda!"}
-
-# Vercel uchun shart bo'lgan handler
-handler = app
+    return {"status": "Bot serveri faol va ishlamoqda!"}
