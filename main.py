@@ -329,7 +329,7 @@ async def handle_group_messages(message: types.Message):
         return
 
     text = (message.text or message.caption or "").lower()
-    has_spam_word = any(word in text for word in SPAM_WORDS)
+    has_spam_word = any(word in text for word in SPOSUM_WORDS if 'SPOSUM_WORDS' in globals() or word in SPAM_WORDS)
     has_link = bool(re.search(LINK_REGEX, text))
 
     if has_spam_word or has_link:
@@ -358,9 +358,8 @@ async def handle_group_messages(message: types.Message):
     except Exception:
         pass
 
-# WEBHOOK HANDLER
+# Webhook Endpoint (Vercel talab qiladigan minimal FastAPI qismi)
 @app.post("/")
-@app.post("/api/index")
 async def handle_webhook(request: Request):
     try:
         data = await request.json()
@@ -372,9 +371,8 @@ async def handle_webhook(request: Request):
         return {"status": "error", "message": str(e)}
 
 @app.get("/")
-@app.get("/api/index")
 async def root():
-    return {"status": "Bot serveri faol va ishlamoqda!"}
+    return {"status": "Bot serveri ishlamoqda!"}
 
-# Vercel Serverless Function Handler
+# Vercel uchun shart bo'lgan handler
 handler = app
