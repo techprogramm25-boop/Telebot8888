@@ -414,4 +414,4 @@ async def handle_webhook(request: Request):
 @app.get("/")
 @app.get("/api/index")
 async def root():
-    return JSONResponse(content={"status": "Bot serveri faol va ishlamoqda!"})*
+    return JSONResponse(content={"status": "Bot serveri faol va ishlamoqda!"})
