@@ -17,7 +17,10 @@ API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTW
 
 ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
-TARGET_GROUP_ID = -1003968416767
+
+# Ikki ta guruh ID raqamlari ro'yxati
+TARGET_GROUPS = [-1003968416767, -1003775919755]
+
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
 BOT_USERNAME = "TeleProzona_Bot"
 
@@ -89,7 +92,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
 
     if user_id in banned_users:
-        await message.answer("⛔️ <b>Siz botdan va guruhdan bloklangansiz!</b>")
+        await message.answer("⛔️ <b>Siz botdan va guruhlardan bloklangansiz!</b>")
         return
 
     if user_id in ADMINS:
@@ -100,7 +103,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
     welcome_text = (
         "<b>Assalomu Alaykum!</b> 😎\n\n"
-        "📢 Yukingiz bo‘lsa — guruhimizga joylang!\n"
+        "📢 Yukingiz bo‘lsa — guruhlarimizga joylang!\n"
         "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
         "👨‍💻 Admin: @Yusufxonpro1\n"
         "📢 Rasmiy kanal: @YukchiForwarder\n\n"
@@ -133,12 +136,15 @@ async def admin_broadcast_process(message: types.Message, state: FSMContext):
     if message.from_user.id not in ADMINS:
         return
 
-    try:
-        await message.copy_to(chat_id=TARGET_GROUP_ID)
-        await message.answer("✅ <b>Reklama muvaffaqiyatli guruhga yuborildi!</b>")
-    except Exception as e:
-        await message.answer(f"❌ Reklama yuborishda xatolik: {e}")
+    success_count = 0
+    for group_id in TARGET_GROUPS:
+        try:
+            await message.copy_to(chat_id=group_id)
+            success_count += 1
+        except Exception:
+            pass
 
+    await message.answer(f"✅ <b>Reklama {success_count} ta guruhga muvaffaqiyatli yuborildi!</b>")
     await state.clear()
 
 @dp.callback_query(F.data == "admin_ban_user")
@@ -158,12 +164,13 @@ async def admin_ban_process(message: types.Message, state: FSMContext):
     banned_users[ban_key] = target
 
     if isinstance(ban_key, int):
-        try:
-            await bot.ban_chat_member(chat_id=TARGET_GROUP_ID, user_id=ban_key)
-        except Exception:
-            pass
+        for group_id in TARGET_GROUPS:
+            try:
+                await bot.ban_chat_member(chat_id=group_id, user_id=ban_key)
+            except Exception:
+                pass
 
-    await message.answer(f"✅ <b>{target}</b> BAN qilindi!")
+    await message.answer(f"✅ <b>{target}</b> barcha guruhlardan BAN qilindi!")
     await state.clear()
 
 @dp.callback_query(F.data == "admin_unban_list")
@@ -193,11 +200,12 @@ async def admin_unban_process(call: types.CallbackQuery):
     if uid in banned_users:
         del banned_users[uid]
         if isinstance(uid, int):
-            try:
-                await bot.unban_chat_member(chat_id=TARGET_GROUP_ID, user_id=uid)
-            except Exception:
-                pass
-        await call.message.edit_text("✅ Bandan chiqarildi!")
+            for group_id in TARGET_GROUPS:
+                try:
+                    await bot.unban_chat_member(chat_id=group_id, user_id=uid)
+                except Exception:
+                    pass
+        await call.message.edit_text("✅ Barcha guruhlardan bandan chiqarildi!")
     else:
         await call.answer("Topilmadi.", show_alert=True)
 
@@ -222,14 +230,18 @@ async def process_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
+    # Har 3 daqiqalik vaqt cheklovi
     if user_id not in ADMINS and user_id in user_last_post_time:
         last_time = user_last_post_time[user_id]
         time_diff = datetime.now() - last_time
-        if time_diff < timedelta(hours=1):
-            remaining_minutes = int((timedelta(hours=1) - time_diff).total_seconds() // 60)
+        if time_diff < timedelta(minutes=3):
+            remaining_seconds = int((timedelta(minutes=3) - time_diff).total_seconds())
+            rem_min = remaining_seconds // 60
+            rem_sec = remaining_seconds % 60
+            time_str = f"{rem_min} daqiqa {rem_sec} soniya" if rem_min > 0 else f"{rem_sec} soniya"
             await message.answer(
-                f"⏱ <b>Siz 1 soatda faqat 1 marta e'lon berishingiz mumkin!</b>\n\n"
-                f"Yangi e'lon joylash uchun yana <b>{remaining_minutes} daqiqa</b> kuting."
+                f"⏱ <b>Har 3 daqiqada faqat 1 marta e'lon berishingiz mumkin!</b>\n\n"
+                f"Yangi e'lon joylash uchun yana <b>{time_str}</b> kuting."
             )
             return
 
@@ -237,12 +249,12 @@ async def process_text(message: types.Message, state: FSMContext):
 
     if user_id not in ADMINS and posts_count > 0 and posts_count % 8 == 0:
         if user_id not in user_add_req:
-            user_add_req[user_id] = random.randint(2, 50)
+            user_add_req[user_id] = random.randint(2, 5)
 
         req_count = user_add_req[user_id]
         await message.answer(
             f"🛑 <b>Diqqat!</b> Siz {posts_count} ta e'lon joyladingiz.\n\n"
-            f"Yangi e'lon joylashni davom ettirish uchun guruhga kamida <b>{req_count} ta odam</b> qo'shishingiz kerak!\n\n"
+            f"Yangi e'lon joylashni davom ettirish uchun guruhlarga kamida <b>{req_count} ta odam</b> qo'shishingiz kerak!\n\n"
             "Odam qo'shib bo'lgach, pastdagi tekshirish tugmasini bosing:",
             reply_markup=get_add_members_keyboard()
         )
@@ -292,26 +304,28 @@ async def process_phone(message: types.Message, state: FSMContext):
     ])
 
     try:
-        if photo_id:
-            await bot.send_photo(
-                chat_id=TARGET_GROUP_ID,
-                photo=photo_id,
-                caption=final_caption,
-                reply_markup=keyboard
-            )
-        else:
-            await bot.send_message(
-                chat_id=TARGET_GROUP_ID,
-                text=final_caption,
-                reply_markup=keyboard
-            )
+        # E'lonni ikkala guruhga birdek yuborish
+        for group_id in TARGET_GROUPS:
+            if photo_id:
+                await bot.send_photo(
+                    chat_id=group_id,
+                    photo=photo_id,
+                    caption=final_caption,
+                    reply_markup=keyboard
+                )
+            else:
+                await bot.send_message(
+                    chat_id=group_id,
+                    text=final_caption,
+                    reply_markup=keyboard
+                )
 
         user_posts_count[user_id] = user_posts_count.get(user_id, 0) + 1
         user_last_post_time[user_id] = datetime.now()
 
-        await message.answer("✅ E'loningiz muvaffaqiyatli guruhga joylandi! Yangi e'lon berish uchun matn yoki rasm yuboring.")
+        await message.answer("✅ E'loningiz barcha guruhlarga muvaffaqiyatli joylandi! Yangi e'lon berish uchun matn yoki rasm yuboring.")
     except Exception as e:
-        await message.answer(f"❌ Xatolik yuz berdi. Bot guruhda admin ekanligini tekshiring.\n{e}")
+        await message.answer(f"❌ Xatolik yuz berdi. Bot guruhlarda admin ekanligini tekshiring.\n{e}")
 
     await state.clear()
 
@@ -320,7 +334,8 @@ async def show_phone_handler(call: types.CallbackQuery):
     phone = call.data.split("show_phone:")[1]
     await call.answer(f"📞 Murojaat uchun nomer:\n{phone}", show_alert=True)
 
-@dp.message(F.chat.id == TARGET_GROUP_ID)
+# Ikkala guruhdagi xabarlarni ham nazorat qilish
+@dp.message(lambda message: message.chat.id in TARGET_GROUPS)
 async def handle_group_messages(message: types.Message):
     user_id = message.from_user.id
 
@@ -334,13 +349,18 @@ async def handle_group_messages(message: types.Message):
     if has_spam_word or has_link:
         try:
             await message.delete()
-            await bot.ban_chat_member(chat_id=TARGET_GROUP_ID, user_id=user_id)
+            for group_id in TARGET_GROUPS:
+                try:
+                    await bot.ban_chat_member(chat_id=group_id, user_id=user_id)
+                except Exception:
+                    pass
             banned_users[user_id] = message.from_user.full_name
         except Exception:
             pass
         return
 
     try:
+        group_chat_id = message.chat.id
         await message.delete()
 
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -353,7 +373,7 @@ async def handle_group_messages(message: types.Message):
             reply_markup=kb
         )
 
-        asyncio.create_task(delete_message_after_delay(TARGET_GROUP_ID, warn_msg.message_id, 3600))
+        asyncio.create_task(delete_message_after_delay(group_chat_id, warn_msg.message_id, 3600))
     except Exception:
         pass
 
