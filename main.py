@@ -392,4 +392,4 @@ async def handle_webhook(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot serveri faol va ishlamoqda!"}
+    return {"status": "Bot serveri faol va ishlamoqda ff!"}
