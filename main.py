@@ -13,7 +13,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
-API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTWqo")
+API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAH0NB1cIxSnvXzWunCO53BnNo8rehsBv8Q")
 
 ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
