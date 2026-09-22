@@ -123,7 +123,6 @@ async def start_cmd_bot1(message: types.Message, state: FSMContext):
         )
         return
 
-    # Oq va chiroyli formatdagi start xabari
     role_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚛 Haydovchi", callback_data="role_driver")],
         [InlineKeyboardButton(text="📦 Kurator", callback_data="role_curator")]
@@ -156,14 +155,14 @@ async def role_driver_chosen(call: types.CallbackQuery, state: FSMContext):
     await call.message.edit_text("👤 Iltimos, ism-sharifingizni to'liq yuboring:")
     await state.set_state(UserRoleState.driver_get_name)
 
-@dp1.message(UserRoleState.driver_get_name)
+@dp1.message(UserRoleState.driver_get_name, F.text)
 async def driver_get_name_handler(message: types.Message, state: FSMContext):
     name = message.text.strip()
     await state.update_data(driver_name=name)
     await message.answer("🚛 Endi mashinangizning nomini to'liqligicha yozib yuboring (masalan: Cobalt, Damas, MAN va h.k.):")
     await state.set_state(UserRoleState.driver_get_car)
 
-@dp1.message(UserRoleState.driver_get_car)
+@dp1.message(UserRoleState.driver_get_car, F.text)
 async def driver_get_car_handler(message: types.Message, state: FSMContext):
     car = message.text.strip()
     data = await state.get_data()
@@ -192,10 +191,10 @@ async def driver_get_car_handler(message: types.Message, state: FSMContext):
 # --- KURATOR QAYDI ---
 @dp1.callback_query(F.data == "role_curator", UserRoleState.choosing_role)
 async def role_curator_chosen(call: types.CallbackQuery, state: FSMContext):
-    await call.message.edit_text("👤 Iltimos, ism-sharifingizni to'liq yuboring:")
+    await call.message.edit_text("👤 Iltimos, ism-sharifingizni to'liq yuboring (masalan: Alisherov Sardor):")
     await state.set_state(UserRoleState.curator_get_name)
 
-@dp1.message(UserRoleState.curator_get_name)
+@dp1.message(UserRoleState.curator_get_name, F.text)
 async def curator_get_name_handler(message: types.Message, state: FSMContext):
     name = message.text.strip()
     user_id = message.from_user.id
@@ -219,25 +218,25 @@ async def load_manual_start(call: types.CallbackQuery, state: FSMContext):
     await call.message.edit_text("📍 Yuk <b>qayerdan</b> jo'naydi? (Shahar / Tuman):")
     await state.set_state(UserRoleState.load_from)
 
-@dp1.message(UserRoleState.load_from)
+@dp1.message(UserRoleState.load_from, F.text)
 async def load_from_handler(message: types.Message, state: FSMContext):
     await state.update_data(load_from=message.text.strip())
     await message.answer("🎯 Yuk <b>qayerga</b> boradi? (Shahar / Tuman):")
     await state.set_state(UserRoleState.load_to)
 
-@dp1.message(UserRoleState.load_to)
+@dp1.message(UserRoleState.load_to, F.text)
 async def load_to_handler(message: types.Message, state: FSMContext):
     await state.update_data(load_to=message.text.strip())
     await message.answer("⚖️ Qanday mashina va yukning vazni qancha? (masalan: Damas, 1 tonna):")
     await state.set_state(UserRoleState.load_weight)
 
-@dp1.message(UserRoleState.load_weight)
+@dp1.message(UserRoleState.load_weight, F.text)
 async def load_weight_handler(message: types.Message, state: FSMContext):
     await state.update_data(load_weight=message.text.strip())
     await message.answer("📝 Yuk haqida qisqacha ma'lumot bering:")
     await state.set_state(UserRoleState.load_info)
 
-@dp1.message(UserRoleState.load_info)
+@dp1.message(UserRoleState.load_info, F.text)
 async def load_info_handler(message: types.Message, state: FSMContext):
     await state.update_data(load_info=message.text.strip())
     urgency_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -254,7 +253,7 @@ async def load_urgency_handler(call: types.CallbackQuery, state: FSMContext):
     await call.message.edit_text("⏳ Bu yuk necha kundan keyin avtomatik o'chirib tashlansin? (Faqat raqam yozing, masalan: 1):")
     await state.set_state(UserRoleState.load_days)
 
-@dp1.message(UserRoleState.load_days)
+@dp1.message(UserRoleState.load_days, F.text)
 async def load_days_handler(message: types.Message, state: FSMContext):
     if not message.text.strip().isdigit():
         await message.answer("❌ Iltimos, faqat raqam kiriting (masalan: 1, 2, 3):")
@@ -270,7 +269,7 @@ async def load_ready_start(call: types.CallbackQuery, state: FSMContext):
     await call.message.edit_text("📝 Tayyor yuk e'loningiz matnini to'liq yuboring:")
     await state.set_state(UserRoleState.load_ready_text)
 
-@dp1.message(UserRoleState.load_ready_text)
+@dp1.message(UserRoleState.load_ready_text, F.text)
 async def load_ready_text_handler(message: types.Message, state: FSMContext):
     text = message.text.strip()
     await state.update_data(load_ready_text=text, load_days=1, load_urgency="Tayyor e'lon")
@@ -464,15 +463,15 @@ async def handle_unban_process(message: types.Message, state: FSMContext):
 # --- Bot 1 admin handlers ---
 @dp1.callback_query(F.data == "admin_broadcast")
 async def b1_broadcast(call: types.CallbackQuery, state: FSMContext): await handle_broadcast_start(call, state)
-@dp1.message(AdminState.waiting_for_broadcast)
+@dp1.message(AdminState.waiting_for_broadcast, F.text)
 async def b1_broadcast_pr(message: types.Message, state: FSMContext): await handle_broadcast_process(message, state, bot1)
 @dp1.callback_query(F.data == "admin_ban_user")
 async def b1_ban(call: types.CallbackQuery, state: FSMContext): await handle_ban_start(call, state)
-@dp1.message(AdminState.waiting_for_ban_target)
+@dp1.message(AdminState.waiting_for_ban_target, F.text)
 async def b1_ban_pr(message: types.Message, state: FSMContext): await handle_ban_process(message, state)
 @dp1.callback_query(F.data == "admin_unban_user")
 async def b1_unban(call: types.CallbackQuery, state: FSMContext): await handle_unban_start(call, state)
-@dp1.message(AdminState.waiting_for_unban_target)
+@dp1.message(AdminState.waiting_for_unban_target, F.text)
 async def b1_unban_pr(message: types.Message, state: FSMContext): await handle_unban_process(message, state)
 
 @dp1.callback_query(F.data == "admin_list_drivers")
@@ -538,15 +537,15 @@ async def bot2_open_admin_panel(call: types.CallbackQuery):
 # --- Bot 2 admin handlers ---
 @dp2.callback_query(F.data == "admin_broadcast")
 async def b2_broadcast(call: types.CallbackQuery, state: FSMContext): await handle_broadcast_start(call, state)
-@dp2.message(AdminState.waiting_for_broadcast)
+@dp2.message(AdminState.waiting_for_broadcast, F.text)
 async def b2_broadcast_pr(message: types.Message, state: FSMContext): await handle_broadcast_process(message, state, bot2)
 @dp2.callback_query(F.data == "admin_ban_user")
 async def b2_ban(call: types.CallbackQuery, state: FSMContext): await handle_ban_start(call, state)
-@dp2.message(AdminState.waiting_for_ban_target)
+@dp2.message(AdminState.waiting_for_ban_target, F.text)
 async def b2_ban_pr(message: types.Message, state: FSMContext): await handle_ban_process(message, state)
 @dp2.callback_query(F.data == "admin_unban_user")
 async def b2_unban(call: types.CallbackQuery, state: FSMContext): await handle_unban_start(call, state)
-@dp2.message(AdminState.waiting_for_unban_target)
+@dp2.message(AdminState.waiting_for_unban_target, F.text)
 async def b2_unban_pr(message: types.Message, state: FSMContext): await handle_unban_process(message, state)
 
 @dp2.callback_query(F.data.in_({"comp_shikoyat", "comp_muammo"}))
@@ -619,6 +618,7 @@ async def webhook_bot1(request: Request):
 async def webhook_bot2(request: Request):
     try:
         json_data = await request.json()
+        update = Update.model_validate(json_data, context={"bot": data := json_data}) # noqa
         update = Update.model_validate(json_data, context={"bot": bot2})
         await dp2.feed_update(bot2, update)
         return {"status": "ok"}
