@@ -18,7 +18,6 @@ API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAFWRUptM5J8GDVObQ8dg5dRQbIhCipr0
 ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
 
-# Ikki ta guruh ID raqamlari ro'yxati
 TARGET_GROUPS = [-1003968416767, -1003775919755]
 
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
@@ -91,6 +90,7 @@ def get_admin_keyboard():
 
 @dp.message(F.text == "/start")
 async def start_cmd(message: types.Message, state: FSMContext):
+    await state.clear()
     user_id = message.from_user.id
 
     if user_id in banned_users:
@@ -325,7 +325,7 @@ async def process_phone(message: types.Message, state: FSMContext):
         user_posts_count[user_id] = user_posts_count.get(user_id, 0) + 1
         user_last_post_time[user_id] = datetime.now()
 
-        await message.answer("✅ E'loningiz barcha guruhlarga muvaffaqiyatli joylandi! Yangi e'lon berish uchun matn yoki rasm yuboring.")
+        await message.answer("✅ E'loningiz muvaffaqiyatli guruhga joylandi! Yangi e'lon berish uchun matn yoki rasm yuboring.")
     except Exception as e:
         await message.answer(f"❌ Xatolik yuz berdi. Bot guruhlarda admin ekanligini tekshiring.\n{e}")
 
@@ -392,3 +392,4 @@ async def handle_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "Bot serveri faol va ishlamoqda!"}
+    
