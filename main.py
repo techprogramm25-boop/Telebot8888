@@ -36,9 +36,12 @@ dp = Dispatcher(storage=storage)
 app = FastAPI()
 
 user_posts_count = {}     
-user_add_req = {}        
+user_add_req = {}         
 banned_users = {}         
 user_last_post_time = {}  
+
+# E'lonlar navbati (Har 20 daqiqada tarqatish uchun)
+pending_posts_queue = asyncio.Queue()
 
 class PostState(StatesGroup):
     waiting_for_text = State()
@@ -65,6 +68,48 @@ async def delete_message_after_delay(chat_id: int, message_id: int, delay_second
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception:
         pass
+
+# Har 20 daqiqada e'lonlarni navbatdan guruhlarga tarqatuvchi fon vazifasi
+async def background_post_sender():
+    while True:
+        try:
+            # Navbatdan e'lonni olish (agar bo'sh bo'lsa kutib turadi)
+            post_data = await pending_posts_queue.get()
+            
+            photo_id = post_data.get("photo_id")
+            final_caption = post_data.get("final_caption")
+            keyboard = post_data.get("keyboard")
+
+            for group_id in TARGET_GROUPS:
+                try:
+                    if photo_id:
+                        await bot.send_photo(
+                            chat_id=group_id,
+                            photo=photo_id,
+                            caption=final_caption,
+                            reply_markup=keyboard
+                        )
+                    else:
+                        await bot.send_message(
+                            chat_id=group_id,
+                            text=final_caption,
+                            reply_markup=keyboard
+                        )
+                    await asyncio.sleep(0.5) # Telegram limitiga tushmaslik uchun kichik pauza
+                except Exception as e:
+                    logging.error(f"Guruhga e'lon yuborishda xatolik ({group_id}): {e}")
+
+            pending_posts_queue.task_done()
+        except Exception as e:
+            logging.error(f"Background sender xatoligi: {e}")
+        
+        # 20 daqiqa kutish (20 * 60 soniya = 1200 soniya)
+        await asyncio.sleep(1200)
+
+@app.on_event("startup")
+async def startup_event():
+    # FastAPI ishga tushishi bilan 20 daqiqalik tarqatuvchi fon jarayonini boshlash
+    asyncio.create_task(background_post_sender())
 
 def get_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -290,7 +335,6 @@ async def process_phone(message: types.Message, state: FSMContext):
     cleaned_text = data.get("cleaned_text", "")
     photo_id = data.get("photo_id")
 
-    # E'lon tagida Admin va ikkala kanal ko'rsatiladigan qism
     final_caption = (
         f"{cleaned_text}\n\n"
         "_____________________\n"
@@ -308,27 +352,19 @@ async def process_phone(message: types.Message, state: FSMContext):
     ])
 
     try:
-        for group_id in TARGET_GROUPS:
-            if photo_id:
-                await bot.send_photo(
-                    chat_id=group_id,
-                    photo=photo_id,
-                    caption=final_caption,
-                    reply_markup=keyboard
-                )
-            else:
-                await bot.send_message(
-                    chat_id=group_id,
-                    text=final_caption,
-                    reply_markup=keyboard
-                )
+        # E'lonni navbatga qo'shish (Har 20 daqiqada navbatma-navbat guruhlarga tarqatiladi)
+        await pending_posts_queue.put({
+            "photo_id": photo_id,
+            "final_caption": final_caption,
+            "keyboard": keyboard
+        })
 
         user_posts_count[user_id] = user_posts_count.get(user_id, 0) + 1
         user_last_post_time[user_id] = datetime.now()
 
-        await message.answer("✅ E'loningiz barcha guruhlarga muvaffaqiyatli joylandi! Yangi e'lon berish uchun matn yoki rasm yuboring.")
+        await message.answer("✅ E'loningiz qabul qilindi va navbatga qo'shildi! U har 20 daqiqada avtomatik ravishda guruhlarga tarqatiladi.")
     except Exception as e:
-        await message.answer(f"❌ Xatolik yuz berdi. Bot guruhlarda admin ekanligini tekshiring.\n{e}")
+        await message.answer(f"❌ Xatolik yuz berdi.\n{e}")
 
     await state.clear()
 
@@ -384,7 +420,9 @@ async def handle_webhook(request: Request):
     try:
         data = await request.json()
         update = Update.model_validate(data, context={"bot": bot})
-        await dp.feed_update(bot, update)
+        # Tezkor ishlashi uchun update'ni fon vazifasi orqali yuborish ham mumkin, 
+        # lekin FastAPI webhook shartiga ko'ra to'g'ridan to'g'ri feed_update qilish eng ishonchli va tezkor usul:
+        asyncio.create_task(dp.feed_update(bot, update))
         return {"status": "ok"}
     except Exception as e:
         logging.error(f"Webhook error: {e}")
