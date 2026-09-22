@@ -11,7 +11,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
-# ================= CONFIGURATION =================
 API_TOKEN_1 = "8726416871:AAEKluMhwL7k4eP0RkchwvF_f82VQmLgc3A"
 API_TOKEN_2 = "8112720689:AAFR_KtcgUYH3vBlsFZcBRj4qH3SGCwI2Zo"
 
@@ -24,7 +23,6 @@ BOT_USERNAME = "TeleProzona_Bot"
 
 logging.basicConfig(level=logging.INFO)
 
-# Ikkala bot uchun obyektlar
 bot1 = Bot(token=API_TOKEN_1, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp1 = Dispatcher(storage=MemoryStorage())
 
@@ -33,7 +31,6 @@ dp2 = Dispatcher(storage=MemoryStorage())
 
 app = FastAPI()
 
-# Xotira ma'lumotlari
 user_posts_count = {}      
 user_add_req = {}          
 banned_users = {}          
@@ -54,8 +51,7 @@ PHONE_REGEX = r'(\+?998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\b\d{2}\s?\d{3}\s?\d{2}\
 LINK_REGEX = r'(https?://[^\s]+|t\.me/[^\s]+|@[a-zA-Z0-9_]+)'
 SPAM_WORDS = ["kanalga", "gruppaga", "o'ting", "oting", "murojaat", "arzon", "aksiya", "reklama", "lichkaga", "manga oting", "http", "t.me"]
 
-# ================= 1-BOT (E'lon boti) Mantiqi =================
-
+# ================= 1-BOT =================
 async def check_subscription(user_id: int) -> bool:
     try:
         member = await bot1.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
@@ -89,7 +85,7 @@ async def start_cmd_bot1(message: types.Message, state: FSMContext):
         return
 
     if user_id in ADMINS:
-        await message.answer("👨‍💻 <b>Hush kelibsiz Admin!</b>\n\nBoshqaruv paneli:", reply_markup=get_admin_keyboard())
+        await message.answer("👨‍💻 <b>Xush kelibsiz Admin!</b>\n\nBoshqaruv paneli:", reply_markup=get_admin_keyboard())
 
     welcome_text = (
         "<b>Assalomu Alaykum!</b> 😎\n\n"
@@ -203,8 +199,7 @@ async def show_phone_handler(call: types.CallbackQuery):
     await call.answer(f"📞 Nomer: {call.data.split('show_phone:')[1]}", show_alert=True)
 
 
-# ================= 2-BOT (Hacker, Spam va Shikoyat boti) Mantiqi =================
-
+# ================= 2-BOT =================
 def get_complaint_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚠️ Shikoyat qilish", callback_data="comp_shikoyat")],
@@ -216,8 +211,8 @@ async def start_cmd_bot2(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer(
         "🛡 <b>Xavfsizlik va Qo'llab-quvvatlash boti</b>\n\n"
-        "Bu bot guruhlarni hackerlar va reklamalardan 100% himoya qiladi.\n"
-        "Adminlarga murojaat qilish uchun pastdagi xizmatlardan birini tanlang:",
+        "Bu bot guruhlarni hackerlar va reklamalardan himoya qiladi.\n"
+        "Adminlarga murojaat qilish uchun pastdagi tugmalardan birini tanlang:",
         reply_markup=get_complaint_keyboard()
     )
 
@@ -225,7 +220,7 @@ async def start_cmd_bot2(message: types.Message, state: FSMContext):
 async def complaint_type_chosen(call: types.CallbackQuery, state: FSMContext):
     c_type = "Shikoyat" if call.data == "comp_shikoyat" else "Muammo"
     await state.update_data(complaint_type=c_type)
-    await call.message.answer(f"📝 Iltimos, {c_type.lower()}ingiz bo'yicha to'liq matn yoki rasm/skrinshot yuboring:")
+    await call.message.answer(f"📝 Iltimos, {c_type.lower()}ingiz bo'yicha to'liq matn yoki rasm yuboring:")
     await state.set_state(ComplaintState.waiting_for_complaint_text)
 
 @dp2.message(ComplaintState.waiting_for_complaint_text)
@@ -245,7 +240,7 @@ async def process_complaint_text(message: types.Message, state: FSMContext):
         except Exception:
             pass
 
-    await message.answer(f"✅ Sizning {c_type.lower()}ingiz adminlarga muvaffaqiyatli yuborildi! Tez orada javob berishadi.")
+    await message.answer(f"✅ Sizning {c_type.lower()}ingiz adminlarga yuborildi!")
     await state.clear()
 
 @dp2.message(lambda message: message.chat.id in TARGET_GROUPS)
@@ -270,15 +265,14 @@ async def security_group_guard(message: types.Message):
             
             for admin_id in ADMINS:
                 try:
-                    await bot2.send_message(admin_id, f"🚨 <b>Hujum/Reklama bloklandi!</b>\nFoydalanuvchi: {message.from_user.full_name} (<code>{user_id}</code>) guruhdan haydaldi va ban qilindi.")
+                    await bot2.send_message(admin_id, f"🚨 <b>Hujum/Reklama bloklandi!</b>\nFoydalanuvchi: {message.from_user.full_name} (<code>{user_id}</code>) guruhdan haydaldi.")
                 except Exception:
                     pass
         except Exception:
             pass
 
 
-# ================= FastAPI Webhook Endpoints (Vercel uchun) =================
-
+# ================= FastAPI Webhook Endpoints =================
 @app.post(f"/webhook/bot1/{API_TOKEN_1}")
 async def webhook_bot1(request: Request):
     try:
@@ -301,4 +295,4 @@ async def webhook_bot2(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Ikkala bot serveri Vercel'da faol va ishlamoqda!"}
+    return {"status": "Bot serveri ishlamoqda!"}
