@@ -13,13 +13,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
-# Bot tokeni
-API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAFWRUptM5J8GDVObQ8dg5dRQbIhCipr0Wk")
+API_TOKEN = os.getenv("BOT_TOKEN", "8735824882:AAEgGbn5qBp2GrvrS1WCJVXs9-LEyRFTWqo")
 
 ADMINS = [6977836294, 8409259397]
 REQUIRED_CHANNEL = "@YukchiForwarder"
 
-# Guruhlar ro'yxati
+# Ikki ta guruh ID raqamlari ro'yxati
 TARGET_GROUPS = [-1003968416767, -1003775919755]
 
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
@@ -36,11 +35,10 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 app = FastAPI()
 
-user_posts_count = {}          
-user_unlocked_milestone = {}   # 8 talik shartdan o'tganlarni eslab qolish uchun
-user_add_req = {}             
-banned_users = {}             
-user_last_post_time = {}      
+user_posts_count = {}     
+user_add_req = {}        
+banned_users = {}         
+user_last_post_time = {}  
 
 class PostState(StatesGroup):
     waiting_for_text = State()
@@ -130,7 +128,10 @@ async def start_cmd(message: types.Message, state: FSMContext):
 async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
         return
-    await call.message.answer("📢 <b>Reklama xabarini yuboring!</b>")
+    await call.message.answer(
+        "📢 <b>Reklama xabarini yuboring!</b>\n\n"
+        "Matn, rasm yoki video yuborishingiz mumkin:"
+    )
     await state.set_state(AdminState.waiting_for_broadcast)
 
 @dp.message(AdminState.waiting_for_broadcast)
@@ -146,14 +147,14 @@ async def admin_broadcast_process(message: types.Message, state: FSMContext):
         except Exception:
             pass
 
-    await message.answer(f"✅ <b>Reklama {success_count} ta guruhga yuborildi!</b>")
+    await message.answer(f"✅ <b>Reklama {success_count} ta guruhga muvaffaqiyatli yuborildi!</b>")
     await state.clear()
 
 @dp.callback_query(F.data == "admin_ban_user")
 async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS:
         return
-    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining ID / Username yuboring:")
+    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchining <b>ID / Username</b> yuboring:")
     await state.set_state(AdminState.waiting_for_ban_target)
 
 @dp.message(AdminState.waiting_for_ban_target)
@@ -172,7 +173,7 @@ async def admin_ban_process(message: types.Message, state: FSMContext):
             except Exception:
                 pass
 
-    await message.answer(f"✅ <b>{target}</b> ban qilindi!")
+    await message.answer(f"✅ <b>{target}</b> barcha guruhlardan BAN qilindi!")
     await state.clear()
 
 @dp.callback_query(F.data == "admin_unban_list")
@@ -207,13 +208,15 @@ async def admin_unban_process(call: types.CallbackQuery):
                     await bot.unban_chat_member(chat_id=group_id, user_id=uid)
                 except Exception:
                     pass
-        await call.message.edit_text("✅ Bandan chiqarildi!")
+        await call.message.edit_text("✅ Barcha guruhlardan bandan chiqarildi!")
+    else:
+        await call.answer("Topilmadi.", show_alert=True)
 
 @dp.callback_query(F.data == "check_sub")
 async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
     if await check_subscription(call.from_user.id):
         await call.message.delete()
-        await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yuborishingiz mumkin:")
+        await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yoki rasmini yuborishingiz mumkin:")
         await state.set_state(PostState.waiting_for_text)
     else:
         await call.answer("❌ Siz hali guruhga qo'shilmadingiz!", show_alert=True)
@@ -230,26 +233,23 @@ async def process_text(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Botdan foydalanish uchun guruhga a'zo bo'ling!", reply_markup=get_sub_keyboard())
         return
 
-    # Vaqt cheklovi (20 daqiqa)
     if user_id not in ADMINS and user_id in user_last_post_time:
         last_time = user_last_post_time[user_id]
         time_diff = datetime.now() - last_time
-        if time_diff < timedelta(minutes=20):
-            remaining_seconds = int((timedelta(minutes=20) - time_diff).total_seconds())
+        if time_diff < timedelta(minutes=3):
+            remaining_seconds = int((timedelta(minutes=3) - time_diff).total_seconds())
             rem_min = remaining_seconds // 60
             rem_sec = remaining_seconds % 60
             time_str = f"{rem_min} daqiqa {rem_sec} soniya" if rem_min > 0 else f"{rem_sec} soniya"
             await message.answer(
-                f"⏱ <b>Har 20 daqiqada faqat 1 marta e'lon berishingiz mumkin!</b>\n\n"
+                f"⏱ <b>Har 3 daqiqada faqat 1 marta e'lon berishingiz mumkin!</b>\n\n"
                 f"Yangi e'lon joylash uchun yana <b>{time_str}</b> kuting."
             )
             return
 
     posts_count = user_posts_count.get(user_id, 0)
-    last_unlocked = user_unlocked_milestone.get(user_id, 0)
 
-    # Har 8 ta e'londan keyin odam qo'shish sharti (tsiklga tushib qolmasligi uchun tuzatilgan)
-    if user_id not in ADMINS and posts_count > 0 and posts_count % 8 == 0 and posts_count != last_unlocked:
+    if user_id not in ADMINS and posts_count > 0 and posts_count % 8 == 0:
         if user_id not in user_add_req:
             user_add_req[user_id] = random.randint(2, 5)
 
@@ -275,11 +275,6 @@ async def process_text(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "check_added_members")
 async def check_added_members_cb(call: types.CallbackQuery, state: FSMContext):
     user_id = call.from_user.id
-    posts_count = user_posts_count.get(user_id, 0)
-    
-    # Ushbu milestondan (masalan 8, 16...) o'tdi deb belgilaymiz, shunda qaytib so'ramaydi
-    user_unlocked_milestone[user_id] = posts_count
-    
     if user_id in user_add_req:
         del user_add_req[user_id]
 
@@ -295,6 +290,7 @@ async def process_phone(message: types.Message, state: FSMContext):
     cleaned_text = data.get("cleaned_text", "")
     photo_id = data.get("photo_id")
 
+    # E'lon tagida Admin va ikkala kanal ko'rsatiladigan qism
     final_caption = (
         f"{cleaned_text}\n\n"
         "_____________________\n"
@@ -396,4 +392,4 @@ async def handle_webhook(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot serveri faol va ishlamoqda ff!"}
+    return {"status": "Bot serveri faol va ishlamoqda!"}
