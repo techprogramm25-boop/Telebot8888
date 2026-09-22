@@ -11,13 +11,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
+# ================= CONFIGURATION =================
 API_TOKEN_1 = "8726416871:AAEKluMhwL7k4eP0RkchwvF_f82VQmLgc3A"
 API_TOKEN_2 = "8112720689:AAFR_KtcgUYH3vBlsFZcBRj4qH3SGCwI2Zo"
 
 ADMINS = [6977836294, 8409259397]
-REQUIRED_CHANNEL = "@YukchiForwarder"
-TARGET_GROUPS = [-1003968416767, -1003775919755]
 
+REQUIRED_CHANNELS = ["@YukchiForwarder", "@YukchiForwarderPeople"]
+TARGET_GROUPS = [-1003968416767, -1003775919755]
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
 BOT_USERNAME = "TeleProzona_Bot"
 
@@ -32,7 +33,6 @@ dp2 = Dispatcher(storage=MemoryStorage())
 app = FastAPI()
 
 user_posts_count = {}      
-user_add_req = {}          
 banned_users = {}          
 user_last_post_time = {}  
 
@@ -51,18 +51,22 @@ PHONE_REGEX = r'(\+?998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\b\d{2}\s?\d{3}\s?\d{2}\
 LINK_REGEX = r'(https?://[^\s]+|t\.me/[^\s]+|@[a-zA-Z0-9_]+)'
 SPAM_WORDS = ["kanalga", "gruppaga", "o'ting", "oting", "murojaat", "arzon", "aksiya", "reklama", "lichkaga", "manga oting", "http", "t.me"]
 
-# ================= 1-BOT =================
-async def check_subscription(user_id: int) -> bool:
-    try:
-        member = await bot1.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
-        return member.status in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.MEMBER]
-    except Exception:
-        return False
+# ================= 1-BOT (E'lon boti) Mantiqi =================
+
+async def check_subscriptions(user_id: int) -> bool:
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await bot1.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status not in [ChatMemberStatus.CREATOR, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.MEMBER]:
+                return False
+        except Exception:
+            return False
+    return True
 
 def get_sub_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 1-Guruhga qo'shilish", url="https://t.me/YukchiForwarder")],
-        [InlineKeyboardButton(text="📢 2-Guruhga qo'shilish (@YukchiForwarderPeople)", url="https://t.me/YukchiForwarderPeople")],
+        [InlineKeyboardButton(text="📢 1-Kanalga qo'shilish", url="https://t.me/YukchiForwarder")],
+        [InlineKeyboardButton(text="📢 2-Kanalga qo'shilish", url="https://t.me/YukchiForwarderPeople")],
         [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_sub")]
     ])
 
@@ -92,13 +96,18 @@ async def start_cmd_bot1(message: types.Message, state: FSMContext):
         "📢 Yukingiz bo‘lsa — guruhlarimizga joylang!\n"
         "🚛 Mashinangiz bo‘lsa — o'zingizga mos yukni toping!\n\n"
         "👨‍💻 <b>Admin:</b> @Yusufxonpro1\n\n"
-        "📢 <b>Rasmiy kanalimiz:</b> @YukchiForwarder\n"
+        "📢 <b>Rasmiy kanallarimiz:</b>\n"
+        "• @YukchiForwarder\n"
+        "• @YukchiForwarderPeople\n\n"
         "<b>E'lon joylash uchun yuk matnini yuboring:</b>"
     )
 
-    is_subscribed = await check_subscription(user_id)
+    is_subscribed = await check_subscriptions(user_id)
     if not is_subscribed:
-        await message.answer(f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval guruhlarimizga qo'shiling!</b>", reply_markup=get_sub_keyboard())
+        await message.answer(
+            f"{welcome_text}\n\n⚠️ <b>Botdan foydalanish uchun avval ikkala kanalimizga ham qo'shiling!</b>", 
+            reply_markup=get_sub_keyboard()
+        )
         return
 
     await message.answer(welcome_text)
@@ -144,12 +153,12 @@ async def admin_ban_process(message: types.Message, state: FSMContext):
 
 @dp1.callback_query(F.data == "check_sub")
 async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
-    if await check_subscription(call.from_user.id):
+    if await check_subscriptions(call.from_user.id):
         await call.message.delete()
         await call.message.answer("✅ Obuna tasdiqlandi! Endi yuk matnini yuboring:")
         await state.set_state(PostState.waiting_for_text)
     else:
-        await call.answer("❌ Siz hali guruhga qo'shilmadingiz!", show_alert=True)
+        await call.answer("❌ Siz hali hamma kanallarga qo'shilmadingiz!", show_alert=True)
 
 @dp1.message(PostState.waiting_for_text)
 async def process_text(message: types.Message, state: FSMContext):
@@ -177,9 +186,21 @@ async def process_phone(message: types.Message, state: FSMContext):
     phone_number = message.text.strip()
     data = await state.get_data()
     
-    final_caption = f"{data.get('cleaned_text', '')}\n\n_____________________\n📞 <b>Tel:</b> {phone_number}\n📢 @YukchiForwarder"
+    # E'lon oxiriga so'ragan ma'lumotlaringiz qo'shildi
+    final_caption = (
+        f"{data.get('cleaned_text', '')}\n\n"
+        f"_____________________\n"
+        f"📞 <b>Tel:</b> {phone_number}\n"
+        f"👨‍💻 <b>Admin:</b> @Yusufxonpro1\n"
+        f"📢 <b>Rasmiy kanalimiz:</b> @YukchiForwarder\n"
+        f"📢 <b>Rasmiy Kanalimiz:</b> @YukchiForwarderPeople"
+    )
+    
+    # E'lon ostidagi 3 ta tugma
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📞 Nomer ko'rish", callback_data=f"show_phone:{phone_number}")]
+        [InlineKeyboardButton(text="📞 Nomer ko'rish", callback_data=f"show_phone:{phone_number}")],
+        [InlineKeyboardButton(text="🌐 Support sayt", url=SUPPORT_SITE_URL)],
+        [InlineKeyboardButton(text="📢 Kanallarimiz", url="https://t.me/YukchiForwarder")]
     ])
 
     try:
@@ -199,11 +220,13 @@ async def show_phone_handler(call: types.CallbackQuery):
     await call.answer(f"📞 Nomer: {call.data.split('show_phone:')[1]}", show_alert=True)
 
 
-# ================= 2-BOT =================
+# ================= 2-BOT (Himoya va Shikoyat boti) Mantiqi =================
+
 def get_complaint_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚠️ Shikoyat qilish", callback_data="comp_shikoyat")],
-        [InlineKeyboardButton(text="❓ Muammo bildirish", callback_data="comp_muammo")]
+        [InlineKeyboardButton(text="❓ Muammo bildirish", callback_data="comp_muammo")],
+        [InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL)]
     ])
 
 @dp2.message(F.text == "/start")
@@ -212,7 +235,7 @@ async def start_cmd_bot2(message: types.Message, state: FSMContext):
     await message.answer(
         "🛡 <b>Xavfsizlik va Qo'llab-quvvatlash boti</b>\n\n"
         "Bu bot guruhlarni hackerlar va reklamalardan himoya qiladi.\n"
-        "Adminlarga murojaat qilish uchun pastdagi tugmalardan birini tanlang:",
+        "Adminlarga murojaat qilish yoki saytimizga o'tish uchun pastdagi tugmalardan foydalaning:",
         reply_markup=get_complaint_keyboard()
     )
 
@@ -273,6 +296,7 @@ async def security_group_guard(message: types.Message):
 
 
 # ================= FastAPI Webhook Endpoints =================
+
 @app.post(f"/webhook/bot1/{API_TOKEN_1}")
 async def webhook_bot1(request: Request):
     try:
@@ -295,4 +319,4 @@ async def webhook_bot2(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot serveri ishlamoqda!"}
+    return {"status": "Bot serveri va kanallar to'liq ishlamoqda!"}
