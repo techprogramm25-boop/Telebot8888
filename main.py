@@ -33,7 +33,7 @@ dp2 = Dispatcher(storage=MemoryStorage())
 app = FastAPI()
 
 user_posts_count = {}      
-banned_users = {}          
+banned_users = {}          # Ikkala bot uchun umumiy banlar ro'yxati
 user_last_post_time = {}  
 
 class PostState(StatesGroup):
@@ -51,6 +51,17 @@ class ComplaintState(StatesGroup):
 PHONE_REGEX = r'(\+?998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\b\d{2}\s?\d{3}\s?\d{2}\s?\d{2}\b|\b\d{9}\b)'
 LINK_REGEX = r'(https?://[^\s]+|t\.me/[^\s]+|@[a-zA-Z0-9_]+)'
 SPAM_WORDS = ["kanalga", "gruppaga", "o'ting", "oting", "murojaat", "arzon", "aksiya", "reklama", "lichkaga", "manga oting", "http", "t.me"]
+
+# ================= UMUMIY ADMIN KEYBOARD =================
+def get_admin_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📢 Reklama yuborish", callback_data="admin_broadcast")],
+        [
+            InlineKeyboardButton(text="🚫 Ban qilish", callback_data="admin_ban_user"),
+            InlineKeyboardButton(text="✅ Bandan chiqarish", callback_data="admin_unban_user")
+        ]
+    ])
+
 
 # ================= 1-BOT (E'lon boti) Mantiqi =================
 
@@ -71,15 +82,6 @@ def get_sub_keyboard():
         [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_sub")]
     ])
 
-def get_admin_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Reklama yuborish", callback_data="admin_broadcast")],
-        [
-            InlineKeyboardButton(text="🚫 Ban qilish", callback_data="admin_ban_user"),
-            InlineKeyboardButton(text="✅ Bandan chiqarish", callback_data="admin_unban_user")
-        ]
-    ])
-
 @dp1.message(F.text == "/start")
 async def start_cmd_bot1(message: types.Message, state: FSMContext):
     await state.clear()
@@ -90,7 +92,7 @@ async def start_cmd_bot1(message: types.Message, state: FSMContext):
         return
 
     if user_id in ADMINS:
-        await message.answer("👨‍💻 <b>Xush kelibsiz Admin!</b>\n\nBoshqaruv paneli:", reply_markup=get_admin_keyboard())
+        await message.answer("👨‍💻 <b>Xush kelibsiz Admin (1-bot)!</b>\n\nBoshqaruv paneli:", reply_markup=get_admin_keyboard())
 
     welcome_text = (
         "<b>Assalomu Alaykum!</b> 😎\n\n"
@@ -114,14 +116,53 @@ async def start_cmd_bot1(message: types.Message, state: FSMContext):
     await message.answer(welcome_text)
     await state.set_state(PostState.waiting_for_text)
 
-@dp1.callback_query(F.data == "admin_broadcast")
-async def admin_broadcast_start(call: types.CallbackQuery, state: FSMContext):
+
+# ================= 2-BOT (Himoya va Shikoyat boti) Mantiqi =================
+
+def get_complaint_keyboard(is_admin: bool = False):
+    buttons = [
+        [InlineKeyboardButton(text="⚠️ Shikoyat qilish", callback_data="comp_shikoyat")],
+        [InlineKeyboardButton(text="❓ Muammo bildirish", callback_data="comp_muammo")],
+        [InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL)]
+    ]
+    if is_admin:
+        buttons.insert(0, [InlineKeyboardButton(text="⚙️ Admin Panel", callback_data="admin_panel_open")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+@dp2.message(F.text == "/start")
+async def start_cmd_bot2(message: types.Message, state: FSMContext):
+    await state.clear()
+    user_id = message.from_user.id
+
+    if user_id in banned_users:
+        await message.answer("⛔️ <b>Siz botdan va guruhlardan bloklangansiz!</b>")
+        return
+
+    is_admin = user_id in ADMINS
+    if is_admin:
+        await message.answer("👨‍💻 <b>Xush kelibsiz Admin (2-bot - Nazoratchi)!</b>\n\nBoshqaruv paneli:", reply_markup=get_admin_keyboard())
+
+    await message.answer(
+        "🛡 <b>Xavfsizlik va Qo'llab-quvvatlash boti (Nazoratchi)</b>\n\n"
+        "Bu bot guruhlarni hackerlar va reklamalardan himoya qiladi.\n"
+        "Adminlarga murojaat qilish yoki saytimizga o'tish uchun pastdagi tugmalardan foydalaning:",
+        reply_markup=get_complaint_keyboard(is_admin)
+    )
+
+@dp2.callback_query(F.data == "admin_panel_open")
+async def bot2_open_admin_panel(call: types.CallbackQuery):
+    if call.from_user.id not in ADMINS: return
+    await call.message.answer("👨‍💻 <b>2-bot Admin Boshqaruv Paneli:</b>", reply_markup=get_admin_keyboard())
+
+
+# ================= UMUMIY ADMIN CALLBACKS (Ikkala bot uchun ishlaydi) =================
+
+async def handle_broadcast_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
     await call.message.answer("📢 <b>Reklama xabarini yuboring!</b>")
     await state.set_state(AdminState.waiting_for_broadcast)
 
-@dp1.message(AdminState.waiting_for_broadcast)
-async def admin_broadcast_process(message: types.Message, state: FSMContext):
+async def handle_broadcast_process(message: types.Message, state: FSMContext, bot_instance: Bot):
     if message.from_user.id not in ADMINS: return
     success_count = 0
     for group_id in TARGET_GROUPS:
@@ -133,37 +174,39 @@ async def admin_broadcast_process(message: types.Message, state: FSMContext):
     await message.answer(f"✅ <b>Reklama {success_count} ta guruhga yuborildi!</b>")
     await state.clear()
 
-@dp1.callback_query(F.data == "admin_ban_user")
-async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
+async def handle_ban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
     await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchi ID yoki Username yuboring:")
     await state.set_state(AdminState.waiting_for_ban_target)
 
-@dp1.message(AdminState.waiting_for_ban_target)
-async def admin_ban_process(message: types.Message, state: FSMContext):
+async def handle_ban_process(message: types.Message, state: FSMContext):
     if message.from_user.id not in ADMINS: return
     target = message.text.strip()
     ban_key = int(target) if target.isdigit() else target
+    
+    # Ikkala bot uchun ham umumiy banned_users ga qo'shiladi
     banned_users[ban_key] = target
+    
     if isinstance(ban_key, int):
         for group_id in TARGET_GROUPS:
-            try: await bot1.ban_chat_member(chat_id=group_id, user_id=ban_key)
-            except Exception: pass
-    await message.answer(f"✅ <b>{target}</b> ban qilindi!")
+            try: 
+                await bot1.ban_chat_member(chat_id=group_id, user_id=ban_key)
+            except Exception: 
+                pass
+    await message.answer(f"✅ <b>{target}</b> ikkala bot va guruhlar bo'yicha ban qilindi!")
     await state.clear()
 
-@dp1.callback_query(F.data == "admin_unban_user")
-async def admin_unban_start(call: types.CallbackQuery, state: FSMContext):
+async def handle_unban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
     await call.message.answer("✅ Bandan chiqarmoqchi bo'lgan foydalanuvchi ID yoki Username yuboring:")
     await state.set_state(AdminState.waiting_for_unban_target)
 
-@dp1.message(AdminState.waiting_for_unban_target)
-async def admin_unban_process(message: types.Message, state: FSMContext):
+async def handle_unban_process(message: types.Message, state: FSMContext):
     if message.from_user.id not in ADMINS: return
     target = message.text.strip()
     unban_key = int(target) if target.isdigit() else target
     
+    # Ikkala bot ro'yxatidan ham o'chiriladi
     if unban_key in banned_users:
         del banned_users[unban_key]
     
@@ -174,8 +217,41 @@ async def admin_unban_process(message: types.Message, state: FSMContext):
             except Exception: 
                 pass
                 
-    await message.answer(f"✅ <b>{target}</b> bandan chiqarildi va guruhlarda yana ishlay oladi!")
+    await message.answer(f"✅ <b>{target}</b> bandan chiqarildi va endi ikkala botda ham ishlay oladi!")
     await state.clear()
+
+
+# --- Bot 1 uchun admin handlers ---
+@dp1.callback_query(F.data == "admin_broadcast")
+async def b1_broadcast(call: types.CallbackQuery, state: FSMContext): await handle_broadcast_start(call, state)
+@dp1.message(AdminState.waiting_for_broadcast)
+async def b1_broadcast_pr(message: types.Message, state: FSMContext): await handle_broadcast_process(message, state, bot1)
+@dp1.callback_query(F.data == "admin_ban_user")
+async def b1_ban(call: types.CallbackQuery, state: FSMContext): await handle_ban_start(call, state)
+@dp1.message(AdminState.waiting_for_ban_target)
+async def b1_ban_pr(message: types.Message, state: FSMContext): await handle_ban_process(message, state)
+@dp1.callback_query(F.data == "admin_unban_user")
+async def b1_unban(call: types.CallbackQuery, state: FSMContext): await handle_unban_start(call, state)
+@dp1.message(AdminState.waiting_for_unban_target)
+async def b1_unban_pr(message: types.Message, state: FSMContext): await handle_unban_process(message, state)
+
+
+# --- Bot 2 uchun admin handlers ---
+@dp2.callback_query(F.data == "admin_broadcast")
+async def b2_broadcast(call: types.CallbackQuery, state: FSMContext): await handle_broadcast_start(call, state)
+@dp2.message(AdminState.waiting_for_broadcast)
+async def b2_broadcast_pr(message: types.Message, state: FSMContext): await handle_broadcast_process(message, state, bot2)
+@dp2.callback_query(F.data == "admin_ban_user")
+async def b2_ban(call: types.CallbackQuery, state: FSMContext): await handle_ban_start(call, state)
+@dp2.message(AdminState.waiting_for_ban_target)
+async def b2_ban_pr(message: types.Message, state: FSMContext): await handle_ban_process(message, state)
+@dp2.callback_query(F.data == "admin_unban_user")
+async def b2_unban(call: types.CallbackQuery, state: FSMContext): await handle_unban_start(call, state)
+@dp2.message(AdminState.waiting_for_unban_target)
+async def b2_unban_pr(message: types.Message, state: FSMContext): await handle_unban_process(message, state)
+
+
+# ================= QOLGAN 1-BOT FUNKSIYALARI =================
 
 @dp1.callback_query(F.data == "check_sub")
 async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
@@ -200,7 +276,6 @@ async def process_text(message: types.Message, state: FSMContext):
     raw_text = message.text or message.caption or ""
     photo_id = message.photo[-1].file_id if message.photo else None
     
-    # Telefon raqami va linklar matndan tozalanadi
     cleaned = re.sub(PHONE_REGEX, "", raw_text)
     cleaned = re.sub(LINK_REGEX, "", cleaned).strip()
 
@@ -245,24 +320,7 @@ async def show_phone_handler(call: types.CallbackQuery):
     await call.answer(f"📞 Nomer: {call.data.split('show_phone:')[1]}", show_alert=True)
 
 
-# ================= 2-BOT (Himoya va Shikoyat boti) Mantiqi =================
-
-def get_complaint_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚠️ Shikoyat qilish", callback_data="comp_shikoyat")],
-        [InlineKeyboardButton(text="❓ Muammo bildirish", callback_data="comp_muammo")],
-        [InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL)]
-    ])
-
-@dp2.message(F.text == "/start")
-async def start_cmd_bot2(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer(
-        "🛡 <b>Xavfsizlik va Qo'llab-quvvatlash boti</b>\n\n"
-        "Bu bot guruhlarni hackerlar va reklamalardan himoya qiladi.\n"
-        "Adminlarga murojaat qilish yoki saytimizga o'tish uchun pastdagi tugmalardan foydalaning:",
-        reply_markup=get_complaint_keyboard()
-    )
+# ================= QOLGAN 2-BOT FUNKSIYALARI =================
 
 @dp2.callback_query(F.data.in_({"comp_shikoyat", "comp_muammo"}))
 async def complaint_type_chosen(call: types.CallbackQuery, state: FSMContext):
@@ -309,6 +367,7 @@ async def security_group_guard(message: types.Message):
                     await bot2.ban_chat_member(chat_id=group_id, user_id=user_id)
                 except Exception:
                     pass
+            # Guruhda spam qilganda ham ikkala bot uchun ban ro'yxatiga tushadi
             banned_users[user_id] = message.from_user.full_name
             
             for admin_id in ADMINS:
