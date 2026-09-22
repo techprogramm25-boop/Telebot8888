@@ -200,6 +200,7 @@ async def process_text(message: types.Message, state: FSMContext):
     raw_text = message.text or message.caption or ""
     photo_id = message.photo[-1].file_id if message.photo else None
     
+    # Telefon raqami va linklar matndan tozalanadi
     cleaned = re.sub(PHONE_REGEX, "", raw_text)
     cleaned = re.sub(LINK_REGEX, "", cleaned).strip()
 
@@ -343,4 +344,4 @@ async def webhook_bot2(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot serveri va bandan chiqarish funksiyasi to'liq ishlamoqda!"}
+    return {"status": "Barcha botlar va himoya tizimi to'liq ishlamoqda!"}
