@@ -69,7 +69,7 @@ PHONE_REGEX = r'(\+?998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\b\d{2}\s?\d{3}\s?\d{2}\
 LINK_REGEX = r'(https?://[^\s]+|t\.me/[^\s]+|@[a-zA-Z0-9_]+)'
 SPAM_WORDS = ["kanalga", "gruppaga", "o'ting", "oting", "murojaat", "arzon", "aksiya", "reklama", "lichkaga", "manga oting", "http", "t.me"]
 
-# ================= UMUMIY ADMIN KEYBOARD =================
+# ================= UMUMIY ADMIN KEYBOARD (Faqat ro'yxatlar va boshqaruv) =================
 def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -113,25 +113,28 @@ async def start_cmd_bot1(message: types.Message, state: FSMContext):
         return
 
     if user_id in ADMINS:
-        await message.answer("👨‍💻 <b>Xush kelibsiz Admin (1-bot)!</b>\n\nBoshqaruv paneli:", reply_markup=get_admin_keyboard())
+        await message.answer("👨‍💻 <b>Admin Boshqaruv Paneli:</b>", reply_markup=get_admin_keyboard())
 
     is_subscribed = await check_subscriptions(user_id)
     if not is_subscribed:
         await message.answer(
-            "⚠️ <b>Botdan foydalanish uchun avval ikkala kanalimizga ham qo'shiling!</b>", 
+            "⚠️ <b>Botdan to'liq foydalanish uchun quyidagi kanallarimizga obuna bo'ling:</b>", 
             reply_markup=get_sub_keyboard()
         )
         return
 
-    # Rol tanlash menyusi
+    # Oq va chiroyli formatdagi start xabari
     role_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚛 Haydovchi", callback_data="role_driver")],
         [InlineKeyboardButton(text="📦 Kurator", callback_data="role_curator")]
     ])
-    await message.answer(
-        "<b>Assalomu Alaykum!</b> 😎\n\nKimgagina xizmat ko'rsatamiz? Iltimos, o'z rolingizni tanlang:",
-        reply_markup=role_keyboard
+    
+    start_text = (
+        "<b>Assalomu alaykum!</b> Oq yo'l botiga xush kelibsiz. 🌟\n\n"
+        "Iltimos, botdagi o'z rolingizni tanlang va qulay tarzda faoliyatingizni boshlang:"
     )
+    
+    await message.answer(start_text, reply_markup=role_keyboard)
     await state.set_state(UserRoleState.choosing_role)
 
 @dp1.callback_query(F.data == "check_sub")
@@ -142,7 +145,7 @@ async def check_sub_callback(call: types.CallbackQuery, state: FSMContext):
             [InlineKeyboardButton(text="🚛 Haydovchi", callback_data="role_driver")],
             [InlineKeyboardButton(text="📦 Kurator", callback_data="role_curator")]
         ])
-        await call.message.answer("✅ Obuna tasdiqlandi! Rolingizni tanlang:", reply_markup=role_keyboard)
+        await call.message.answer("✅ Obuna tasdiqlandi! Marhamat, o'z rolingizni tanlang:", reply_markup=role_keyboard)
         await state.set_state(UserRoleState.choosing_role)
     else:
         await call.answer("❌ Siz hali hamma kanallarga qo'shilmadingiz!", show_alert=True)
@@ -157,7 +160,7 @@ async def role_driver_chosen(call: types.CallbackQuery, state: FSMContext):
 async def driver_get_name_handler(message: types.Message, state: FSMContext):
     name = message.text.strip()
     await state.update_data(driver_name=name)
-    await message.answer("🚛 Endi sizning mashinangizning nomini to'liqligicha yozib yuboring (masalan: Cobalt, Damas, MAN va h.k.):")
+    await message.answer("🚛 Endi mashinangizning nomini to'liqligicha yozib yuboring (masalan: Cobalt, Damas, MAN va h.k.):")
     await state.set_state(UserRoleState.driver_get_car)
 
 @dp1.message(UserRoleState.driver_get_car)
@@ -175,10 +178,10 @@ async def driver_get_car_handler(message: types.Message, state: FSMContext):
     }
     
     await message.answer(
-        f"✅ <b>Muvaffaqiyatli ro'yxatdan o'tdingiz!</b>\n\n"
+        f"✅ <b>Tabriklaymiz, muvaffaqiyatli ro'yxatdan o'tdingiz!</b>\n\n"
         f"👤 Ism: {data.get('driver_name')}\n"
         f"🚛 Mashina: {car}\n\n"
-        f"Sizga mos yuklar chiqsa, bot orqali xabar beriladi.",
+        f"Sizga mos keladigan yuklar chiqishi bilan xabar beramiz.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📢 Kanallarimiz", url="https://t.me/YukchiForwarder")],
             [InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL)]
@@ -208,7 +211,7 @@ async def curator_get_name_handler(message: types.Message, state: FSMContext):
         [InlineKeyboardButton(text="✍️ Qo'lda kiritish", callback_data="load_manual")],
         [InlineKeyboardButton(text="⚡️ Tayyor e'lon tashlash", callback_data="load_ready")]
     ])
-    await message.answer(f"✅ Xush kelibsiz, kurator <b>{name}</b>!\n\nYukni qanday kiritmoqchisiz?", reply_markup=choice_kb)
+    await message.answer(f"✅ Xush kelibsiz, kurator <b>{name}</b>!\n\nYukni kiritish usulini tanlang:", reply_markup=choice_kb)
     await state.set_state(UserRoleState.curator_choice_type)
 
 @dp1.callback_query(F.data == "load_manual", UserRoleState.curator_choice_type)
@@ -248,7 +251,7 @@ async def load_info_handler(message: types.Message, state: FSMContext):
 async def load_urgency_handler(call: types.CallbackQuery, state: FSMContext):
     urgency = "Shoshilinch 🔥" if call.data == "urgency_yes" else "Uncha shoshilinch emas ⏳"
     await state.update_data(load_urgency=urgency)
-    await call.message.edit_text("⏳ Bu yuk necha kundan keyin avtomatik o'chirib tashlansin? (Faqat raqam yozing, masalan: 2):")
+    await call.message.edit_text("⏳ Bu yuk necha kundan keyin avtomatik o'chirib tashlansin? (Faqat raqam yozing, masalan: 1):")
     await state.set_state(UserRoleState.load_days)
 
 @dp1.message(UserRoleState.load_days)
@@ -327,7 +330,7 @@ async def finalize_and_send_load(message: types.Message, state: FSMContext, data
         "expire_time": expire_time
     }
     
-    await message.answer("✅ Yukingiz guruhga 1 soniyaga ham qolmasdan muvaffaqiyatli yuborildi va vaqtli o'chish tizimiga qo'shildi!")
+    await message.answer("✅ Yukingiz guruhga muvaffaqiyatli yuborildi va vaqtli o'chish tizimiga qo'shildi!")
     await state.clear()
 
 @dp1.callback_query(F.data.startswith("show_curator_phone:"))
@@ -354,7 +357,6 @@ async def accept_load_handler(call: types.CallbackQuery):
         
     curator_id = load["user_id"]
     
-    # Kuratorga xabar berish
     try:
         notification_text = (
             f"✅ <b>Yukingizga haydovchi topildi!</b>\n\n"
@@ -370,7 +372,7 @@ async def accept_load_handler(call: types.CallbackQuery):
     await call.answer("✅ Buyurtma qabul qilindi! Kuratorga ma'lumotingiz yuborildi.", show_alert=True)
 
 
-# ================= AVTOMATIK YUKLARNI O'CHIRISH (BACKGROUND TASK) =================
+# ================= AVTOMATIK YUKLARNI O'CHIRISH =================
 
 async def background_load_cleaner():
     while True:
@@ -393,7 +395,7 @@ async def background_load_cleaner():
 
 async def handle_broadcast_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
-    await call.message.answer("📢 <b>Reklama xabarini yuboring!</b>")
+    await call.message.answer("📢 <b>Reklama xabarini yuboring:</b>")
     await state.set_state(AdminState.waiting_for_broadcast)
 
 async def handle_broadcast_process(message: types.Message, state: FSMContext, bot_instance: Bot):
@@ -410,7 +412,7 @@ async def handle_broadcast_process(message: types.Message, state: FSMContext, bo
 
 async def handle_ban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
-    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchi ID yoki Username yuboring:")
+    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchi ID yoki Username ni yuboring:")
     await state.set_state(AdminState.waiting_for_ban_target)
 
 async def handle_ban_process(message: types.Message, state: FSMContext):
@@ -425,16 +427,16 @@ async def handle_ban_process(message: types.Message, state: FSMContext):
                 await bot1.ban_chat_member(chat_id=group_id, user_id=ban_key)
             except Exception: 
                 pass
-    await message.answer(f"✅ <b>{target}</b> ikkala bot va guruhlar bo'yicha ban qilindi!")
+    await message.answer(f"✅ <b>{target}</b> ban qilindi!")
     await state.clear()
 
 async def handle_unban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
     if banned_users:
         banned_list_str = "\n".join([f"• <code>{k}</code>" for k in banned_users.keys()])
-        await message.answer(f"📋 <b>Hozirda ban qilinganlar:</b>\n{banned_list_str}\n\n✅ Bandan chiqarmoqchi bo'lgan ID yoki Username ni yuboring:")
+        await message.answer(f"📋 <b>Ban qilinganlar:</b>\n{banned_list_str}\n\n✅ Bandan chiqarish uchun ID yoki Username ni yuboring:")
     else:
-        await message.answer("✅ Hozircha ban qilinganlar yo'q.\n\nBandan chiqarmoqchi bo'lgan ID ni yuboring:")
+        await message.answer("✅ Hozircha ban qilinganlar yo'q.")
     await state.set_state(AdminState.waiting_for_unban_target)
 
 async def handle_unban_process(message: types.Message, state: FSMContext):
@@ -452,14 +454,14 @@ async def handle_unban_process(message: types.Message, state: FSMContext):
             except Exception: 
                 pass
         try:
-            await bot1.send_message(chat_id=unban_key, text="🎉 <b>Tabriklaymiz! Sizga qo'yilgan ban olib tashlandi va guruhlarga qo'shila olasiz!</b>")
+            await bot1.send_message(chat_id=unban_key, text="🎉 <b>Sizga qo'yilgan ban olib tashlandi!</b>")
         except Exception:
             pass
                 
-    await message.answer(f"✅ <b>{target}</b> bandan chiqarildi va xabar yuborildi!")
+    await message.answer(f"✅ <b>{target}</b> bandan chiqarildi!")
     await state.clear()
 
-# --- Bot 1 uchun admin handlers ---
+# --- Bot 1 admin handlers ---
 @dp1.callback_query(F.data == "admin_broadcast")
 async def b1_broadcast(call: types.CallbackQuery, state: FSMContext): await handle_broadcast_start(call, state)
 @dp1.message(AdminState.waiting_for_broadcast)
@@ -477,18 +479,18 @@ async def b1_unban_pr(message: types.Message, state: FSMContext): await handle_u
 async def admin_list_drivers(call: types.CallbackQuery):
     if call.from_user.id not in ADMINS: return
     if not drivers_db:
-        await call.message.answer("🚛 Hozircha ro'yxatdan o'tgan haydovchilar yo'q.")
+        await call.message.answer("🚛 Hozircha haydovchilar yo'q.")
         return
     text = "🚛 <b>Haydovchilar ro'yxati:</b>\n\n"
     for uid, d in drivers_db.items():
-        text += f"• <b>{d['name']}</b> | Mashina: {d['car']} | Tel: {d['phone']} (ID: <code>{uid}</code>)\n"
+        text += f"• <b>{d['name']}</b> | {d['car']} | Tel: {d['phone']} (ID: <code>{uid}</code>)\n"
     await call.message.answer(text)
 
 @dp1.callback_query(F.data == "admin_list_curators")
 async def admin_list_curators(call: types.CallbackQuery):
     if call.from_user.id not in ADMINS: return
     if not curators_db:
-        await call.message.answer("📦 Hozircha ro'yxatdan o'tgan kuratorlar yo'q.")
+        await call.message.answer("📦 Hozircha kuratorlar yo'q.")
         return
     text = "📦 <b>Kuratorlar ro'yxati:</b>\n\n"
     for uid, c in curators_db.items():
@@ -515,26 +517,25 @@ async def start_cmd_bot2(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
 
     if user_id in banned_users:
-        await message.answer("⛔️ <b>Siz botdan va guruhlardan bloklangansiz!</b>")
+        await message.answer("⛔️ <b>Siz bloklangansiz!</b>")
         return
 
     is_admin = user_id in ADMINS
     if is_admin:
-        await message.answer("👨‍💻 <b>Xush kelibsiz Admin (2-bot - Nazoratchi)!</b>\n\nBoshqaruv paneli:", reply_markup=get_admin_keyboard())
+        await message.answer("👨‍💻 <b>2-bot Admin Paneli:</b>", reply_markup=get_admin_keyboard())
 
     await message.answer(
-        "🛡 <b>Xavfsizlik va Nazoratchi Boti</b>\n\n"
-        "Bu bot guruhlarni reklama va xatoliklardan himoya qiladi.\n"
-        "Shikoyat qilish yoki adminlarga yozish uchun pastdagi tugmalardan foydalaning:",
+        "🛡 <b>Nazoratchi va Xavfsizlik Boti</b>\n\n"
+        "Guruh xavfsizligini ta'minlaydi. Murojaat yoki shikoyatingiz bo'lsa pastdagi tugmani bosing:",
         reply_markup=get_complaint_keyboard(is_admin)
     )
 
 @dp2.callback_query(F.data == "admin_panel_open")
 async def bot2_open_admin_panel(call: types.CallbackQuery):
     if call.from_user.id not in ADMINS: return
-    await call.message.answer("👨‍💻 <b>2-bot Admin Boshqaruv Paneli:</b>", reply_markup=get_admin_keyboard())
+    await call.message.answer("👨‍💻 <b>2-bot Boshqaruv Paneli:</b>", reply_markup=get_admin_keyboard())
 
-# --- Bot 2 uchun admin handlers ---
+# --- Bot 2 admin handlers ---
 @dp2.callback_query(F.data == "admin_broadcast")
 async def b2_broadcast(call: types.CallbackQuery, state: FSMContext): await handle_broadcast_start(call, state)
 @dp2.message(AdminState.waiting_for_broadcast)
@@ -552,7 +553,7 @@ async def b2_unban_pr(message: types.Message, state: FSMContext): await handle_u
 async def complaint_type_chosen(call: types.CallbackQuery, state: FSMContext):
     c_type = "Shikoyat" if call.data == "comp_shikoyat" else "Muammo"
     await state.update_data(complaint_type=c_type)
-    await call.message.answer(f"📝 Iltimos, {c_type.lower()}ingiz bo'yicha to'liq matn yoki rasm yuboring:")
+    await call.message.answer(f"📝 Iltimos, {c_type.lower()}ingiz matni yoki rasmini yuboring:")
     await state.set_state(ComplaintState.waiting_for_complaint_text)
 
 @dp2.message(ComplaintState.waiting_for_complaint_text)
@@ -572,7 +573,7 @@ async def process_complaint_text(message: types.Message, state: FSMContext):
         except Exception:
             pass
 
-    await message.answer(f"✅ Sizning {c_type.lower()}ingiz adminlarga yuborildi!")
+    await message.answer(f"✅ {c_type} adminga yuborildi!")
     await state.clear()
 
 @dp2.message(lambda message: message.chat.id in TARGET_GROUPS)
@@ -594,17 +595,11 @@ async def security_group_guard(message: types.Message):
                 except Exception:
                     pass
             banned_users[user_id] = message.from_user.full_name
-            
-            for admin_id in ADMINS:
-                try:
-                    await bot2.send_message(admin_id, f"🚨 <b>Nazoratchi guruhni himoya qildi!</b>\nFoydalanuvchi: {message.from_user.full_name} (<code>{user_id}</code>) spam/xato uchun guruhdan haydaldi.")
-                except Exception:
-                    pass
         except Exception:
             pass
 
 
-# ================= FastAPI Webhooks & Lifespan =================
+# ================= Webhooks & Startup =================
 
 @app.on_event("startup")
 async def startup_event():
@@ -632,4 +627,4 @@ async def webhook_bot2(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Barcha tizimlar, haydovchi, kurator, avtomatik o'chirish va nazoratchi to'liq ishlamoqda!"}
+    return {"status": "Tizim to'liq ishlamoqda!"}
