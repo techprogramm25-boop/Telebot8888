@@ -173,6 +173,8 @@ async def process_text(message: types.Message, state: FSMContext):
 
     raw_text = message.text or message.caption or ""
     photo_id = message.photo[-1].file_id if message.photo else None
+    
+    # Matn ichidagi har qanday telefon raqamini va havolalarni tozalab tashlaymiz
     cleaned = re.sub(PHONE_REGEX, "", raw_text)
     cleaned = re.sub(LINK_REGEX, "", cleaned).strip()
 
@@ -186,17 +188,16 @@ async def process_phone(message: types.Message, state: FSMContext):
     phone_number = message.text.strip()
     data = await state.get_data()
     
-    # E'lon oxiriga so'ragan ma'lumotlaringiz qo'shildi
+    # Matn ichidan nomer olib tashlandi, faqat oxirida kanallar va admin chiqadi (Tel matnda ko'rinmaydi)
     final_caption = (
         f"{data.get('cleaned_text', '')}\n\n"
         f"_____________________\n"
-        f"📞 <b>Tel:</b> {phone_number}\n"
         f"👨‍💻 <b>Admin:</b> @Yusufxonpro1\n"
         f"📢 <b>Rasmiy kanalimiz:</b> @YukchiForwarder\n"
         f"📢 <b>Rasmiy Kanalimiz:</b> @YukchiForwarderPeople"
     )
     
-    # E'lon ostidagi 3 ta tugma
+    # E'lon ostidagi 3 ta tugma (Nomer faqat tugmani bosganda chiqadi)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📞 Nomer ko'rish", callback_data=f"show_phone:{phone_number}")],
         [InlineKeyboardButton(text="🌐 Support sayt", url=SUPPORT_SITE_URL)],
@@ -319,4 +320,4 @@ async def webhook_bot2(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot serveri va kanallar to'liq ishlamoqda!"}
+    return {"status": "Bot serveri to'liq ishlamoqda!"}
