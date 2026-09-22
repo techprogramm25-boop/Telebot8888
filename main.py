@@ -42,6 +42,7 @@ class PostState(StatesGroup):
 
 class AdminState(StatesGroup):
     waiting_for_ban_target = State()
+    waiting_for_unban_target = State()
     waiting_for_broadcast = State()
 
 class ComplaintState(StatesGroup):
@@ -75,7 +76,7 @@ def get_admin_keyboard():
         [InlineKeyboardButton(text="📢 Reklama yuborish", callback_data="admin_broadcast")],
         [
             InlineKeyboardButton(text="🚫 Ban qilish", callback_data="admin_ban_user"),
-            InlineKeyboardButton(text="✅ Bandan chiqarish", callback_data="admin_unban_list")
+            InlineKeyboardButton(text="✅ Bandan chiqarish", callback_data="admin_unban_user")
         ]
     ])
 
@@ -135,7 +136,7 @@ async def admin_broadcast_process(message: types.Message, state: FSMContext):
 @dp1.callback_query(F.data == "admin_ban_user")
 async def admin_ban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
-    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchi ID/Username yuboring:")
+    await call.message.answer("🚫 Ban qilmoqchi bo'lgan foydalanuvchi ID yoki Username yuboring:")
     await state.set_state(AdminState.waiting_for_ban_target)
 
 @dp1.message(AdminState.waiting_for_ban_target)
@@ -149,6 +150,31 @@ async def admin_ban_process(message: types.Message, state: FSMContext):
             try: await bot1.ban_chat_member(chat_id=group_id, user_id=ban_key)
             except Exception: pass
     await message.answer(f"✅ <b>{target}</b> ban qilindi!")
+    await state.clear()
+
+@dp1.callback_query(F.data == "admin_unban_user")
+async def admin_unban_start(call: types.CallbackQuery, state: FSMContext):
+    if call.from_user.id not in ADMINS: return
+    await call.message.answer("✅ Bandan chiqarmoqchi bo'lgan foydalanuvchi ID yoki Username yuboring:")
+    await state.set_state(AdminState.waiting_for_unban_target)
+
+@dp1.message(AdminState.waiting_for_unban_target)
+async def admin_unban_process(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMINS: return
+    target = message.text.strip()
+    unban_key = int(target) if target.isdigit() else target
+    
+    if unban_key in banned_users:
+        del banned_users[unban_key]
+    
+    if isinstance(unban_key, int):
+        for group_id in TARGET_GROUPS:
+            try: 
+                await bot1.unban_chat_member(chat_id=group_id, user_id=unban_key, only_if_banned=True)
+            except Exception: 
+                pass
+                
+    await message.answer(f"✅ <b>{target}</b> bandan chiqarildi va guruhlarda yana ishlay oladi!")
     await state.clear()
 
 @dp1.callback_query(F.data == "check_sub")
@@ -174,7 +200,6 @@ async def process_text(message: types.Message, state: FSMContext):
     raw_text = message.text or message.caption or ""
     photo_id = message.photo[-1].file_id if message.photo else None
     
-    # Matn ichidagi har qanday telefon raqamini va havolalarni tozalab tashlaymiz
     cleaned = re.sub(PHONE_REGEX, "", raw_text)
     cleaned = re.sub(LINK_REGEX, "", cleaned).strip()
 
@@ -188,7 +213,6 @@ async def process_phone(message: types.Message, state: FSMContext):
     phone_number = message.text.strip()
     data = await state.get_data()
     
-    # Matn ichidan nomer olib tashlandi, faqat oxirida kanallar va admin chiqadi (Tel matnda ko'rinmaydi)
     final_caption = (
         f"{data.get('cleaned_text', '')}\n\n"
         f"_____________________\n"
@@ -197,7 +221,6 @@ async def process_phone(message: types.Message, state: FSMContext):
         f"📢 <b>Rasmiy Kanalimiz:</b> @YukchiForwarderPeople"
     )
     
-    # E'lon ostidagi 3 ta tugma (Nomer faqat tugmani bosganda chiqadi)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📞 Nomer ko'rish", callback_data=f"show_phone:{phone_number}")],
         [InlineKeyboardButton(text="🌐 Support sayt", url=SUPPORT_SITE_URL)],
@@ -320,4 +343,4 @@ async def webhook_bot2(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Bot serveri to'liq ishlamoqda!"}
+    return {"status": "Bot serveri va bandan chiqarish funksiyasi to'liq ishlamoqda!"}
