@@ -33,7 +33,7 @@ dp2 = Dispatcher(storage=MemoryStorage())
 app = FastAPI()
 
 # Bazalar va xotiralar
-banned_users = {}          # {user_id: target_str}
+banned_users = {}         # {user_id: target_str}
 drivers_db = {}            # {user_id: {"name": name, "car": car, "phone": phone}}
 curators_db = {}           # {user_id: {"name": name, "phone": phone}}
 active_loads = {}          # {load_id: {"user_id": ..., "text": ..., "group_msg_ids": {}, "expire_time": ...}}
@@ -69,7 +69,7 @@ PHONE_REGEX = r'(\+?998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}|\b\d{2}\s?\d{3}\s?\d{2}\
 LINK_REGEX = r'(https?://[^\s]+|t\.me/[^\s]+|@[a-zA-Z0-9_]+)'
 SPAM_WORDS = ["kanalga", "gruppaga", "o'ting", "oting", "murojaat", "arzon", "aksiya", "reklama", "lichkaga", "manga oting", "http", "t.me"]
 
-# ================= UMUMIY ADMIN KEYBOARD (Faqat ro'yxatlar va boshqaruv) =================
+# ================= UMUMIY ADMIN KEYBOARD =================
 def get_admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -82,7 +82,6 @@ def get_admin_keyboard():
             InlineKeyboardButton(text="✅ Bandan chiqarish", callback_data="admin_unban_user")
         ]
     ])
-
 
 # ================= 1-BOT Mantiqi =================
 
@@ -370,7 +369,6 @@ async def accept_load_handler(call: types.CallbackQuery):
         
     await call.answer("✅ Buyurtma qabul qilindi! Kuratorga ma'lumotingiz yuborildi.", show_alert=True)
 
-
 # ================= AVTOMATIK YUKLARNI O'CHIRISH =================
 
 async def background_load_cleaner():
@@ -388,7 +386,6 @@ async def background_load_cleaner():
                         pass
         for lid in expired_ids:
             active_loads.pop(lid, None)
-
 
 # ================= UMUMIY ADMIN CALLBACKS & LOGIC =================
 
@@ -433,9 +430,9 @@ async def handle_unban_start(call: types.CallbackQuery, state: FSMContext):
     if call.from_user.id not in ADMINS: return
     if banned_users:
         banned_list_str = "\n".join([f"• <code>{k}</code>" for k in banned_users.keys()])
-        await message.answer(f"📋 <b>Ban qilinganlar:</b>\n{banned_list_str}\n\n✅ Bandan chiqarish uchun ID yoki Username ni yuboring:")
+        await call.message.answer(f"📋 <b>Ban qilinganlar:</b>\n{banned_list_str}\n\n✅ Bandan chiqarish uchun ID yoki Username ni yuboring:")
     else:
-        await message.answer("✅ Hozircha ban qilinganlar yo'q.")
+        await call.message.answer("✅ Hozircha ban qilinganlar yo'q.")
     await state.set_state(AdminState.waiting_for_unban_target)
 
 async def handle_unban_process(message: types.Message, state: FSMContext):
@@ -495,7 +492,6 @@ async def admin_list_curators(call: types.CallbackQuery):
     for uid, c in curators_db.items():
         text += f"• <b>{c['name']}</b> | Tel: {c['phone']} (ID: <code>{uid}</code>)\n"
     await call.message.answer(text)
-
 
 # ================= 2-BOT (Nazoratchi) Mantiqi =================
 
@@ -597,7 +593,6 @@ async def security_group_guard(message: types.Message):
         except Exception:
             pass
 
-
 # ================= Webhooks & Startup =================
 
 @app.on_event("startup")
@@ -618,7 +613,6 @@ async def webhook_bot1(request: Request):
 async def webhook_bot2(request: Request):
     try:
         json_data = await request.json()
-        update = Update.model_validate(json_data, context={"bot": data := json_data}) # noqa
         update = Update.model_validate(json_data, context={"bot": bot2})
         await dp2.feed_update(bot2, update)
         return {"status": "ok"}
