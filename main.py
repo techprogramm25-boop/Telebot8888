@@ -1,9 +1,8 @@
 import re
 import logging
-import random
 import asyncio
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode, ChatMemberStatus
 from aiogram.client.default import DefaultBotProperties
@@ -13,9 +12,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
 # ================= CONFIGURATION =================
-# 1-Asosiy e'lon boti tokeni
 API_TOKEN_1 = "8726416871:AAEKluMhwL7k4eP0RkchwvF_f82VQmLgc3A"
-# 2-Himoya va Shikoyat boti tokeni
 API_TOKEN_2 = "8112720689:AAFR_KtcgUYH3vBlsFZcBRj4qH3SGCwI2Zo"
 
 ADMINS = [6977836294, 8409259397]
@@ -71,13 +68,6 @@ def get_sub_keyboard():
         [InlineKeyboardButton(text="📢 1-Guruhga qo'shilish", url="https://t.me/YukchiForwarder")],
         [InlineKeyboardButton(text="📢 2-Guruhga qo'shilish (@YukchiForwarderPeople)", url="https://t.me/YukchiForwarderPeople")],
         [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_sub")]
-    ])
-
-def get_add_members_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ 1-Guruhga odam qo'shish", url="https://t.me/YukchiForwarder")],
-        [InlineKeyboardButton(text="➕ 2-Guruhga odam qo'shish", url="https://t.me/YukchiForwarderPeople")],
-        [InlineKeyboardButton(text="🔄 Qo'shdim, tekshirish", callback_data="check_added_members")]
     ])
 
 def get_admin_keyboard():
@@ -246,7 +236,6 @@ async def process_complaint_text(message: types.Message, state: FSMContext):
     
     user_info = f"👤 <b>Kimdan:</b> {user.full_name} (@{user.username or 'yoq'}, ID: <code>{user.id}</code>)\n📌 <b>Turi:</b> {c_type}"
     
-    # Barcha adminlarga yuboramiz
     for admin_id in ADMINS:
         try:
             if message.photo:
@@ -256,10 +245,9 @@ async def process_complaint_text(message: types.Message, state: FSMContext):
         except Exception:
             pass
 
-    await message.answer(f"✅ Sizning {c_type.lower()}ingiz adinlarga muvaffaqiyatli yuborildi! Tez orada javob berishadi.")
+    await message.answer(f"✅ Sizning {c_type.lower()}ingiz adminlarga muvaffaqiyatli yuborildi! Tez orada javob berishadi.")
     await state.clear()
 
-# Guruhlardagi hacker, reklamachi va hujumlarni avtomatik bloklash (2-bot orqali)
 @dp2.message(lambda message: message.chat.id in TARGET_GROUPS)
 async def security_group_guard(message: types.Message):
     user_id = message.from_user.id
@@ -270,7 +258,6 @@ async def security_group_guard(message: types.Message):
     has_spam = any(w in text for w in SPAM_WORDS)
     has_link = bool(re.search(LINK_REGEX, text))
 
-    # Agar hackerlar hujumi, havola yoki reklama bo'lsa darhol yo'q qilamiz va banlaymiz
     if has_spam or has_link:
         try:
             await message.delete()
@@ -281,7 +268,6 @@ async def security_group_guard(message: types.Message):
                     pass
             banned_users[user_id] = message.from_user.full_name
             
-            # Adminlarga ham xabar beramiz
             for admin_id in ADMINS:
                 try:
                     await bot2.send_message(admin_id, f"🚨 <b>Hujum/Reklama bloklandi!</b>\nFoydalanuvchi: {message.from_user.full_name} (<code>{user_id}</code>) guruhdan haydaldi va ban qilindi.")
@@ -291,23 +277,23 @@ async def security_group_guard(message: types.Message):
             pass
 
 
-# ================= FastAPI Webhook Endpointlar =================
+# ================= FastAPI Webhook Endpoints (Vercel uchun) =================
 
-@app.post("/webhook/bot1")
+@app.post(f"/webhook/bot1/{API_TOKEN_1}")
 async def webhook_bot1(request: Request):
     try:
-        data = await request.json()
-        update = Update.model_validate(data, context={"bot": bot1})
+        json_data = await request.json()
+        update = Update.model_validate(json_data, context={"bot": bot1})
         await dp1.feed_update(bot1, update)
         return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.post("/webhook/bot2")
+@app.post(f"/webhook/bot2/{API_TOKEN_2}")
 async def webhook_bot2(request: Request):
     try:
-        data = await request.json()
-        update = Update.model_validate(data, context={"bot": bot2})
+        json_data = await request.json()
+        update = Update.model_validate(json_data, context={"bot": bot2})
         await dp2.feed_update(bot2, update)
         return {"status": "ok"}
     except Exception as e:
@@ -315,4 +301,4 @@ async def webhook_bot2(request: Request):
 
 @app.get("/")
 async def root():
-    return {"status": "Ikala bot ham xavfsiz va birgalikda ishlamoqda!"}
+    return {"status": "Ikkala bot serveri Vercel'da faol va ishlamoqda!"}
