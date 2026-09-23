@@ -12,15 +12,15 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
 
 # ================= CONFIGURATION =================
-API_TOKEN_1 = "8726416871:AAEKluMhwL7k4eP0RkchwvF_f82VQmLgc3A"
-API_TOKEN_2 = "8112720689:AAFR_KtcgUYH3vBlsFZcBRj4qH3SGCwI2Zo"
+API_TOKEN_1 = "8726416871:AAEKluMhwL7k4eP0RkchwvF_f82VQmLgc3A" # @YukchiForwarder_Bot (E'lonchi)
+API_TOKEN_2 = "8112720689:AAFR_KtcgUYH3vBlsFZcBRj4qH3SGCwI2Zo" # @YukchiForwarderorg_Bot (Nazoratchi)
 
 ADMINS = [6977836294, 8409259397]
 
 REQUIRED_CHANNELS = ["@YukchiForwarder", "@YukchiForwarderPeople"]
 TARGET_GROUPS = [-1003968416767, -1003775919755]
 SUPPORT_SITE_URL = "https://vercell-flax.vercel.app/"
-BOT_USERNAME = "TeleProzona_Bot"
+ELONCHI_BOT_USERNAME = "YukchiForwarder_Bot"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -94,7 +94,7 @@ def get_sub_keyboard():
         [InlineKeyboardButton(text="🔄 Tekshirish", callback_data="check_sub")]
     ])
 
-# ================= 1-BOT Mantiqi =================
+# ================= 1-BOT (@YukchiForwarder_Bot - E'lonchi) =================
 @dp1.message(F.text == "/start")
 async def start_cmd_bot1(message: types.Message, state: FSMContext):
     await state.clear()
@@ -104,17 +104,15 @@ async def start_cmd_bot1(message: types.Message, state: FSMContext):
         await message.answer("⛔️ <b>Siz botdan va guruhlardan bloklangansiz!</b>")
         return
 
-    # Agar foydalanuvchi admin bo'lsa, obuna shart emas va darhol panel chiqadi
+    # Adminlar uchun obuna talab qilinmaydi
     if user_id in ADMINS:
         await message.answer("👨‍💻 <b>Admin Boshqaruv Paneli:</b>", reply_markup=get_admin_keyboard())
         return
 
-    # Oddiy foydalanuvchilar uchun majburiy obuna tekshiruvi
     if not await check_subscriptions(user_id):
         await message.answer("⚠️ <b>Botdan to'liq foydalanish uchun quyidagi kanallarimizga obuna bo'ling:</b>", reply_markup=get_sub_keyboard())
         return
 
-    # Agar oldindan ro'yxatdan o'tgan bo'lsa
     if user_id in drivers_db:
         d = drivers_db[user_id]
         await message.answer(f"🚛 <b>Xush kelibsiz, haydovchi {d['name']}!</b>\nMashinangiz: {d['car']}\n\nYuklarni kuzatishingiz mumkin.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -326,13 +324,13 @@ async def accept_load_handler(call: types.CallbackQuery):
         pass
     await call.answer("✅ Kuratorga ma'lumotingiz yuborildi!", show_alert=True)
 
-# ================= 2-BOT (Nazoratchi va Shikoyat) =================
+# ================= 2-BOT (@YukchiForwarderorg_Bot - Nazoratchi va Shikoyat) =================
 def get_complaint_keyboard(is_admin: bool = False):
     buttons = [
         [InlineKeyboardButton(text="⚠️ Shikoyat qilish", callback_data="comp_shikoyat")],
         [InlineKeyboardButton(text="❓ Muammo bildirish", callback_data="comp_muammo")],
         [InlineKeyboardButton(text="🌐 Support Sayt", url=SUPPORT_SITE_URL)],
-        [InlineKeyboardButton(text="📢 Botlarga o'tish", url=f"https://t.me/{BOT_USERNAME}")]
+        [InlineKeyboardButton(text="📢 E'lonchi Botga o'tish", url=f"https://t.me/{ELONCHI_BOT_USERNAME}")]
     ]
     if is_admin:
         buttons.insert(0, [InlineKeyboardButton(text="⚙️ Admin Panel", callback_data="admin_panel_open")])
@@ -497,7 +495,6 @@ async def webhook_bot1(request: Request):
 @app.post(f"/webhook/bot2/{API_TOKEN_2}")
 async def webhook_bot2(request: Request):
     try:
-        update = Update.model_validate(await request.json(), context={"bot": data := request.json() and bot2}) # type: ignore
         update = Update.model_validate(await request.json(), context={"bot": bot2})
         await dp2.feed_update(bot2, update)
         return {"status": "ok"}
